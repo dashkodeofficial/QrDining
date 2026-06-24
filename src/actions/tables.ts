@@ -77,8 +77,31 @@ export async function deleteTable(id: string): Promise<ActionResult> {
   if (!auth.ok) return auth;
 
   const supabase = createAdminClient();
+
+  // 1. Find all session IDs for this table (needed to delete payments + sessions)
+  const { data: sessions } = await supabase
+    .from("table_sessions")
+    .select("id")
+    .eq("table_id", id);
+
+  const sessionIds = (sessions ?? []).map((s) => s.id);
+
+  // 2. Delete payments referencing those sessions (RESTRICT FK)
+  if (sessionIds.length > 0) {
+    await supabase.from("payments").delete().in("table_session_id", sessionIds);
+  }
+
+  // 3. Delete orders for this table (RESTRICT FK on tables + table_sessions;
+  //    order_items cascade from orders)
+  await supabase.from("orders").delete().eq("table_id", id);
+
+  // 4. Delete table_sessions (waiter_requests + feedback cascade)
+  await supabase.from("table_sessions").delete().eq("table_id", id);
+
+  // 5. Finally delete the table (qr_tokens + remaining waiter_requests cascade)
   const { error } = await supabase.from("tables").delete().eq("id", id);
-  if (error) return { ok: false, error: "Delete failed (table may have active sessions)." };
+  if (error) return { ok: false, error: "Delete failed." };
+
   revalidatePath("/admin/tables");
   return { ok: true, data: undefined };
 }
