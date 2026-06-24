@@ -182,9 +182,15 @@ export async function placeOrder(
     return { ok: false, error: "Could not save order items. Please try again." };
   }
 
+  // 6. If admin path, mark the table as OCCUPIED so the waiter dashboard reflects it
+  if (!verified) {
+    await supabase.from("tables").update({ status: "OCCUPIED" }).eq("id", tableId);
+  }
+
   revalidatePath("/orders");
   revalidatePath("/orders/[id]");
   revalidatePath("/kitchen");
+  revalidatePath("/waiter");
 
   return { ok: true, data: { orderId: order.id } };
 }

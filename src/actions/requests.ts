@@ -64,6 +64,64 @@ export async function createWaiterRequest(
   return { ok: true, data: undefined };
 }
 
+/**
+ * Staff-initiated bill request. Allows waiters to request a bill for a table
+ * from the waiter dashboard. Finds the active session for the table and creates
+ * a REQUEST_BILL waiter request, then advances table + session status.
+ */
+export async function createStaffBillRequest(
+  tableId: string,
+): Promise<ActionResult> {
+  const auth = await requireCapability("waiter.view");
+  if (!auth.ok) return auth;
+
+  const supabase = createAdminClient();
+
+  // Find the most recent active session for this table.
+  const { data: session } = await supabase
+    .from("table_sessions")
+    .select("id, table_id")
+    .eq("table_id", tableId)
+    .is("ended_at", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!session) return { ok: false, error: "No active session for this table." };
+
+  // Throttle: one pending bill request per session
+  const { data: existing } = await supabase
+    .from("waiter_requests")
+    .select("id")
+    .eq("table_session_id", session.id)
+    .eq("type", "REQUEST_BILL")
+    .neq("status", "RESOLVED")
+    .maybeSingle();
+
+  if (existing) {
+    return { ok: false, error: "A bill request is already pending for this table." };
+  }
+
+  const { error } = await supabase.from("waiter_requests").insert({
+    table_session_id: session.id,
+    table_id: tableId,
+    type: "REQUEST_BILL",
+    status: "PENDING",
+  });
+
+  if (error) return { ok: false, error: "Could not create bill request. Try again." };
+
+  // Advance table + session status for staff visibility.
+  await Promise.all([
+    supabase.from("tables").update({ status: "BILL_REQUESTED" }).eq("id", tableId),
+    supabase.from("table_sessions").update({ status: "BILL_REQUESTED" }).eq("id", session.id),
+  ]);
+
+  revalidatePath("/waiter");
+  revalidatePath("/cashier");
+  return { ok: true, data: undefined };
+}
+
 /** Staff: mark a waiter request resolved. */
 export async function resolveWaiterRequest(
   requestId: string,

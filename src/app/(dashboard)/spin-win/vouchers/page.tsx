@@ -14,6 +14,7 @@ import {
   Printer,
 } from "lucide-react";
 import { getVouchers, generateVouchers, deleteVoucher } from "@/actions/spin-win";
+import { getSettings } from "@/actions/settings";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -32,6 +33,7 @@ export default function VoucherSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [activeTab, setActiveTab] = useState<TabFilter>("active");
+  const [restaurantName, setRestaurantName] = useState("Restaurant");
 
   // Form state
   const [count, setCount] = useState(10);
@@ -40,9 +42,13 @@ export default function VoucherSettingsPage() {
 
   useEffect(() => {
     async function load() {
-      const res = await getVouchers();
-      if (res.ok) setVouchers(res.data);
-      else toast.error(res.error);
+      const [vouchersRes, settingsRes] = await Promise.all([
+        getVouchers(),
+        getSettings(),
+      ]);
+      if (vouchersRes.ok) setVouchers(vouchersRes.data);
+      else toast.error(vouchersRes.error);
+      if (settingsRes.ok) setRestaurantName(settingsRes.data.name);
       setLoading(false);
     }
     load();
@@ -110,7 +116,7 @@ export default function VoucherSettingsPage() {
         <div class="voucher">
           <div class="voucher-header">
             <div class="voucher-icon">🎟</div>
-            <div class="voucher-title">Spin & Win Voucher</div>
+            <div class="voucher-title">${restaurantName} Voucher</div>
           </div>
           <div class="voucher-code">${v.code}</div>
           <div class="voucher-info">
@@ -188,7 +194,7 @@ export default function VoucherSettingsPage() {
     ctx.fillStyle = "#e23744";
     ctx.font = "bold 11px system-ui, sans-serif";
     ctx.textAlign = "left";
-    ctx.fillText("SPIN & WIN VOUCHER", 25, 35);
+    ctx.fillText(`${restaurantName.toUpperCase()} VOUCHER`, 25, 35);
 
     // Divider
     ctx.strokeStyle = "#eee";

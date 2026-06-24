@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Bell, CheckCircle2, UtensilsCrossed, Banknote, Sparkles, Clock, Plus } from "lucide-react";
+import { Bell, CheckCircle2, UtensilsCrossed, Banknote, Sparkles, Clock, Plus, Receipt } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { getTables, getPendingWaiterRequests } from "@/actions/dashboard";
-import { resolveWaiterRequest } from "@/actions/requests";
+import { resolveWaiterRequest, createStaffBillRequest } from "@/actions/requests";
 import { updateTableStatus } from "@/actions/tables";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -69,7 +69,8 @@ export default function WaiterDashboardPage() {
         (payload) => {
           const req = payload.new as WaiterRequestWithTable;
           if (payload.eventType === "INSERT" && req.status === "PENDING") {
-            setRequests((prev) => [{ ...req, table_name: prev.find((r) => r.table_id === req.table_id)?.table_name }, ...prev]);
+            const tableName = tables.find((t) => t.id === req.table_id)?.name;
+            setRequests((prev) => [{ ...req, table_name: tableName ?? prev.find((r) => r.table_id === req.table_id)?.table_name }, ...prev]);
           } else if (payload.eventType === "UPDATE") {
             setRequests((prev) =>
               prev
@@ -111,6 +112,13 @@ export default function WaiterDashboardPage() {
     const res = await resolveWaiterRequest(requestId);
     toast[res.ok ? "success" : "error"](
       res.ok ? "Request resolved" : res.error,
+    );
+  }
+
+  async function handleBillRequest(tableId: string) {
+    const res = await createStaffBillRequest(tableId);
+    toast[res.ok ? "success" : "error"](
+      res.ok ? "Bill requested for table" : res.error,
     );
   }
 
@@ -160,6 +168,7 @@ export default function WaiterDashboardPage() {
                   onClean={() => markTableCleaned(table.id)}
                   onOccupy={() => markTableOccupied(table.id)}
                   onSetStatus={(status) => setTableStatus(table.id, status)}
+                  onBillRequest={() => handleBillRequest(table.id)}
                   canManageStatus={role === "ADMIN" || role === "MANAGER" || role === "WAITER"}
                 />
               ))}
@@ -224,6 +233,7 @@ export default function WaiterDashboardPage() {
                   onClean={() => markTableCleaned(table.id)}
                   onOccupy={() => markTableOccupied(table.id)}
                   onSetStatus={(status) => setTableStatus(table.id, status)}
+                  onBillRequest={() => handleBillRequest(table.id)}
                   canManageStatus={role === "ADMIN" || role === "MANAGER" || role === "WAITER"}
                 />
               ))}
@@ -295,12 +305,14 @@ function TableCard({
   onClean,
   onOccupy,
   onSetStatus,
+  onBillRequest,
   canManageStatus,
 }: {
   table: RestaurantTable;
   onClean: () => void;
   onOccupy: () => void;
   onSetStatus?: (status: string) => void;
+  onBillRequest: () => void;
   canManageStatus?: boolean;
 }) {
   const cfg = TABLE_STATUS_CONFIG[table.status] ?? { label: table.status.replace(/_/g, " "), bg: "bg-muted", dot: "bg-muted-foreground" };
@@ -343,11 +355,18 @@ function TableCard({
             )}
           </div>
         )}
-        <Link href={`/menu?table=${table.id}`} prefetch={true}>
-          <Button size="sm" className="w-full h-8 text-xs">
-            <Plus className="mr-1.5 size-3" /> Place Order
-          </Button>
-        </Link>
+        <div className="flex gap-2">
+          <Link href={`/menu?table=${table.id}`} prefetch={true} className="flex-1">
+            <Button size="sm" className="w-full h-8 text-xs">
+              <Plus className="mr-1.5 size-3" /> Place Order
+            </Button>
+          </Link>
+          {table.status === "OCCUPIED" && (
+            <Button size="sm" variant="outline" className="flex-1 h-8 text-xs bg-background/50" onClick={onBillRequest}>
+              <Receipt className="mr-1.5 size-3" /> Request Bill
+            </Button>
+          )}
+        </div>
         {canManageStatus && onSetStatus && (
           <div className="pt-0.5">
             <select

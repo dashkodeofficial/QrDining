@@ -5,7 +5,7 @@ import { ArrowLeft, Bell, Receipt, Star, CheckCircle2, Loader2, AlertCircle, Ute
 import Link from "next/link";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
-import { getMyOrderById, hasCompletedPayment } from "@/actions/customer";
+import { getMyOrderById } from "@/actions/customer";
 import { Price } from "@/components/shared/price";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -38,7 +38,6 @@ export default function OrderDetailPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
-  const [paid, setPaid] = useState(false);
   const [taxRatePercent, setTaxRatePercent] = useState(0);
   const [serviceChargeAmount, setServiceChargeAmount] = useState(0);
   const [waiterStatus, setWaiterStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
@@ -50,10 +49,7 @@ export default function OrderDetailPage({
     const supabase = createClient();
 
     async function load() {
-      const [detailRes, paymentRes] = await Promise.all([
-        getMyOrderById(id),
-        hasCompletedPayment(),
-      ]);
+      const detailRes = await getMyOrderById(id);
 
       if (!detailRes.ok) {
         setError(detailRes.error);
@@ -63,7 +59,6 @@ export default function OrderDetailPage({
 
       setOrder(detailRes.data.order);
       setItems(detailRes.data.items);
-      setPaid(paymentRes.ok ? paymentRes.data : false);
       setTaxRatePercent(detailRes.data.taxRatePercent);
       setServiceChargeAmount(detailRes.data.serviceChargeAmount);
       setLoading(false);
@@ -101,8 +96,8 @@ export default function OrderDetailPage({
     ? ORDER_TIMELINE_STEPS.indexOf(order.status as typeof ORDER_TIMELINE_STEPS[number])
     : -1;
 
-  // Feedback gating: only after SERVED or COMPLETED AND payment completed
-  const showFeedback = order && ["SERVED", "COMPLETED"].includes(order.status) && paid;
+  // Feedback gating: show as soon as order is SERVED or COMPLETED
+  const showFeedback = order && ["SERVED", "COMPLETED"].includes(order.status);
 
   const subtotalCents = items.reduce((sum, i) => sum + i.unit_price_cents * i.quantity, 0);
   const taxCents = Math.round(subtotalCents * taxRatePercent / 100);
