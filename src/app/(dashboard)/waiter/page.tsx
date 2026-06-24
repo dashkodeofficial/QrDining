@@ -195,7 +195,7 @@ export default function WaiterDashboardPage() {
           ) : (
             <div className="space-y-2">
               {requests.map((req) => (
-                <RequestCard key={req.id} req={req} onResolve={() => resolveRequest(req.id)} />
+                <RequestCard key={req.id} req={req} table={tables.find((t) => t.id === req.table_id)} onResolve={() => resolveRequest(req.id)} />
               ))}
             </div>
           )}
@@ -246,7 +246,7 @@ export default function WaiterDashboardPage() {
               <EmptyState icon="🛎️" title="No pending requests" description="All caught up!" />
             ) : (
               requests.map((req) => (
-                <RequestCard key={req.id} req={req} onResolve={() => resolveRequest(req.id)} />
+                <RequestCard key={req.id} req={req} table={tables.find((t) => t.id === req.table_id)} onResolve={() => resolveRequest(req.id)} />
               ))
             )}
           </TabsContent>
@@ -256,7 +256,7 @@ export default function WaiterDashboardPage() {
   );
 }
 
-function RequestCard({ req, onResolve }: { req: WaiterRequestWithTable; onResolve: () => void }) {
+function RequestCard({ req, table, onResolve }: { req: WaiterRequestWithTable; table?: RestaurantTable; onResolve: () => void }) {
   const color = statusColor(req.type);
   return (
     <Card className="overflow-hidden border-border/50">
@@ -275,7 +275,7 @@ function RequestCard({ req, onResolve }: { req: WaiterRequestWithTable; onResolv
                 {WAITER_REQUEST_LABEL[req.type] ?? req.type}
               </p>
               <p className="text-xs text-muted-foreground truncate">
-                Table {req.table_name ?? req.table_id.slice(0, 8)}
+                Table {table?.name ?? req.table_name ?? req.table_id.slice(0, 8)}
               </p>
             </div>
           </div>

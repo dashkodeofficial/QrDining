@@ -59,6 +59,43 @@ export async function getVerifiedSession(): Promise<VerifiedSession | null> {
   };
 }
 
+/**
+ * Like getVerifiedSession but does NOT reject ended sessions.
+ * Used for feedback submission — the session may have been ended by
+ * completePayment, but we still need to know which session the customer
+ * belonged to. Token→table mapping is still validated for anti-spoofing.
+ */
+export async function getSessionForFeedback(): Promise<VerifiedSession | null> {
+  const cookieStore = await cookies();
+  const sessionId = cookieStore.get(TABLE_SESSION_COOKIE)?.value;
+  if (!sessionId) return null;
+
+  const supabase = createAdminClient();
+
+  const { data: session, error } = await supabase
+    .from("table_sessions")
+    .select("*")
+    .eq("id", sessionId)
+    .maybeSingle();
+
+  if (error || !session) return null;
+
+  // Token still valid and maps to this session's table
+  const { data: tokenRow } = await supabase
+    .from("qr_tokens")
+    .select("token, revoked_at, table_id")
+    .eq("id", session.qr_token_id)
+    .maybeSingle();
+  if (!tokenRow || tokenRow.revoked_at) return null;
+  if (tokenRow.table_id !== session.table_id) return null;
+
+  return {
+    session,
+    table_id: session.table_id,
+    qr_token: tokenRow.token,
+  };
+}
+
 /** Set the session cookie (used by the /qr/[token] resolver). */
 export async function setSessionCookie(sessionId: string) {
   const cookieStore = await cookies();

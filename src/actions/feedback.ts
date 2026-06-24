@@ -2,20 +2,21 @@
 
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getVerifiedSession } from "@/lib/session";
+import { getSessionForFeedback } from "@/lib/session";
 import { getCurrentStaff } from "@/lib/auth";
 import { feedbackSchema } from "@/lib/validations";
 import type { ActionResult } from "./orders";
 
 /**
- * Submit feedback. Per spec, feedback is gated: the session must have at least
- * one SERVED order AND a COMPLETED payment. We enforce both server-side — a
- * client cannot unlock feedback by editing state.
+ * Submit feedback. Feedback is gated on having at least one SERVED or COMPLETED
+ * order on the session. Payment completion is NOT required — the session may
+ * have been ended by completePayment, so we use getSessionForFeedback which
+ * allows ended sessions.
  */
 export async function submitFeedback(
   raw: unknown,
 ): Promise<ActionResult> {
-  const verified = await getVerifiedSession();
+  const verified = await getSessionForFeedback();
   if (!verified) {
     const staff = await getCurrentStaff();
     if (staff) {
@@ -31,7 +32,7 @@ export async function submitFeedback(
 
   const supabase = createAdminClient();
 
-  // Gate: served order + completed payment on this session.
+  // Gate: served or completed order on this session.
   const { data: served } = await supabase
     .from("orders")
     .select("id")
@@ -40,18 +41,7 @@ export async function submitFeedback(
     .limit(1)
     .maybeSingle();
   if (!served) {
-    return { ok: false, error: "Feedback opens after your order is served and paid." };
-  }
-
-  const { data: paid } = await supabase
-    .from("payments")
-    .select("id")
-    .eq("table_session_id", verified.session.id)
-    .eq("status", "COMPLETED")
-    .limit(1)
-    .maybeSingle();
-  if (!paid) {
-    return { ok: false, error: "Feedback opens after your payment is complete." };
+    return { ok: false, error: "Feedback opens after your order is served." };
   }
 
   // One feedback per session.
