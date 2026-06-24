@@ -1,26 +1,237 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:is(.dark *));
 
+/*
+ * ============================================================
+ *  Bold Red & White — Centralized Restaurant Theme
+ * ============================================================
+ *  Single source of truth for all colors. Components must NEVER
+ *  hardcode hex/oklch values — always reference the semantic
+ *  tokens below (bg-primary, text-accent, etc.) or the raw
+ *  --app-* CSS variables. To rebrand the entire app, edit only
+ *  this file (and lib/theme/colors.ts for JS-side consumers).
+ *
+ *  Palette: bold red primary, orange accent, green success,
+ *  light-gray surfaces, charcoal ink.
+ * ============================================================
+ */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-sans);
   --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+
+  /* Restaurant-domain semantic colors (spec: success / warning / danger) */
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+:root {
+  /* ---- Bold Red & White light theme ----
+     Raw brand colors exposed for JS consumers (QR/charts):
+       --app-primary   #E23744  brand red
+       --app-accent    #F97316  orange
+       --app-success   #22C55E  green
+       --app-warning   #F59E0B  amber
+       --app-danger    #EF4444  red
+       --app-info      #3B82F6  blue
+       --app-surface   #F8F8F8  light gray
+       --app-ink       #1A1A1A  charcoal
+  */
+  --app-primary: #e23744;
+  --app-accent: #f97316;
+  --app-success: #22c55e;
+  --app-warning: #f59e0b;
+  --app-danger: #ef4444;
+  --app-info: #3b82f6;
+  --app-surface: #f8f8f8;
+  --app-ink: #1a1a1a;
+
+  --background: oklch(0.97 0.002 0);        /* light gray #F8F8F8 */
+  --foreground: oklch(0.18 0.004 0);        /* charcoal #1A1A1A */
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0.004 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.18 0.004 0);
+
+  --primary: oklch(0.58 0.22 27);           /* brand red #E23744 */
+  --primary-foreground: oklch(1 0 0);
+
+  --secondary: oklch(0.96 0.002 0);         /* light gray surface */
+  --secondary-foreground: oklch(0.25 0.004 0);
+
+  --muted: oklch(0.95 0.003 0);
+  --muted-foreground: oklch(0.5 0.005 0);
+
+  --accent: oklch(0.68 0.19 41);            /* orange #F97316 */
+  --accent-foreground: oklch(1 0 0);
+
+  /* Restaurant semantic states */
+  --success: oklch(0.62 0.17 145);          /* green #22C55E */
+  --success-foreground: oklch(1 0 0);
+  --warning: oklch(0.75 0.16 65);           /* amber #F59E0B */
+  --warning-foreground: oklch(0.18 0.004 0);
+  --danger: oklch(0.58 0.22 27);            /* red #EF4444 */
+  --danger-foreground: oklch(1 0 0);
+  --destructive: oklch(0.58 0.22 27);
+  --info: oklch(0.55 0.18 260);             /* blue #3B82F6 */
+  --info-foreground: oklch(1 0 0);
+
+  --border: oklch(0.9 0.003 0);
+  --input: oklch(0.92 0.003 0);
+  --ring: oklch(0.58 0.22 27);
+
+  --chart-1: oklch(0.58 0.22 27);
+  --chart-2: oklch(0.68 0.19 41);
+  --chart-3: oklch(0.62 0.17 145);
+  --chart-4: oklch(0.75 0.16 65);
+  --chart-5: oklch(0.55 0.18 260);
+
+  --radius: 0.75rem;
+
+  --sidebar: oklch(0.97 0.002 0);
+  --sidebar-foreground: oklch(0.18 0.004 0);
+  --sidebar-primary: oklch(0.58 0.22 27);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.96 0.002 0);
+  --sidebar-accent-foreground: oklch(0.25 0.004 0);
+  --sidebar-border: oklch(0.9 0.003 0);
+  --sidebar-ring: oklch(0.58 0.22 27);
+}
+
+.dark {
+  --background: oklch(0.14 0.002 0);        /* dark charcoal */
+  --foreground: oklch(0.95 0.003 0);
+  --card: oklch(0.2 0.003 0);
+  --card-foreground: oklch(0.95 0.003 0);
+  --popover: oklch(0.2 0.003 0);
+  --popover-foreground: oklch(0.95 0.003 0);
+
+  --primary: oklch(0.62 0.22 27);           /* lighter red on dark */
+  --primary-foreground: oklch(0.14 0.002 0);
+
+  --secondary: oklch(0.25 0.003 0);
+  --secondary-foreground: oklch(0.95 0.003 0);
+
+  --muted: oklch(0.25 0.003 0);
+  --muted-foreground: oklch(0.65 0.005 0);
+
+  --accent: oklch(0.68 0.19 41);
+  --accent-foreground: oklch(0.14 0.002 0);
+
+  --success: oklch(0.65 0.17 145);
+  --success-foreground: oklch(0.14 0.002 0);
+  --warning: oklch(0.75 0.16 65);
+  --warning-foreground: oklch(0.14 0.002 0);
+  --danger: oklch(0.62 0.22 27);
+  --danger-foreground: oklch(0.95 0.003 0);
+  --destructive: oklch(0.62 0.22 27);
+  --info: oklch(0.6 0.18 260);
+  --info-foreground: oklch(0.95 0.003 0);
+
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.62 0.22 27);
+
+  --chart-1: oklch(0.62 0.22 27);
+  --chart-2: oklch(0.68 0.19 41);
+  --chart-3: oklch(0.65 0.17 145);
+  --chart-4: oklch(0.75 0.16 65);
+  --chart-5: oklch(0.6 0.18 260);
+
+  --sidebar: oklch(0.16 0.002 0);
+  --sidebar-foreground: oklch(0.95 0.003 0);
+  --sidebar-primary: oklch(0.62 0.22 27);
+  --sidebar-primary-foreground: oklch(0.95 0.003 0);
+  --sidebar-accent: oklch(0.25 0.003 0);
+  --sidebar-accent-foreground: oklch(0.95 0.003 0);
+  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-ring: oklch(0.62 0.22 27);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    /* Native-app feel for customer-facing surfaces */
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: none;
+  }
+  html {
+    @apply font-sans;
+    scroll-behavior: smooth;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Utility helpers for restaurant-specific semantic surfaces.
+   Prefer these over arbitrary color values in components. */
+@layer utilities {
+  .bg-app-surface {
+    background-color: var(--app-surface);
+  }
+  .text-app-ink {
+    color: var(--app-ink);
+  }
+  /* Hide scrollbars for horizontal category strips (mobile-native feel) */
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  /* Safe-area aware padding for mobile bottom bars */
+  .pb-safe {
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem);
+  }
 }
