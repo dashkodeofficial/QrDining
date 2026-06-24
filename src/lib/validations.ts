@@ -91,15 +91,6 @@ export const loginSchema = z.object({
 });
 
 /* ---------------------------------------------------------------------------
- * Inventory (admin/manager)
- * ------------------------------------------------------------------------ */
-export const inventorySchema = z.object({
-  name: z.string().trim().min(1, "Name is required").max(80),
-  quantity: z.coerce.number().int().min(0, "Quantity must be 0 or more"),
-  low_stock_threshold: z.coerce.number().int().min(0, "Threshold must be 0 or more"),
-});
-
-/* ---------------------------------------------------------------------------
  * Restaurant settings (admin/owner)
  * ------------------------------------------------------------------------ */
 export const settingsSchema = z.object({
@@ -108,7 +99,7 @@ export const settingsSchema = z.object({
   phone: z.string().trim().max(30).optional().or(z.literal("")),
   email: z.string().email().optional().or(z.literal("")),
   tax_rate_percent: z.coerce.number().int().min(0).max(100).default(0),
-  service_charge_percent: z.coerce.number().int().min(0).max(100).default(0),
+  service_charge_amount: z.coerce.number().int().min(0).max(100000).default(0),
   receipt_footer: z.string().trim().max(500).optional().or(z.literal("")),
 });
 
@@ -119,5 +110,4 @@ export type PlaceOrderInput = z.infer<typeof placeOrderSchema>;
 export type StaffInput = z.infer<typeof staffSchema>;
 export type FeedbackInput = z.infer<typeof feedbackSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
-export type InventoryInput = z.infer<typeof inventorySchema>;
 export type SettingsInput = z.infer<typeof settingsSchema>;

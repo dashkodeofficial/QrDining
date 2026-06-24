@@ -1,24 +1,25 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Bell, CheckCircle2, UtensilsCrossed, Banknote, Sparkles } from "lucide-react";
+import { Bell, CheckCircle2, UtensilsCrossed, Banknote, Sparkles, Clock, Plus } from "lucide-react";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { getTables, getPendingWaiterRequests } from "@/actions/dashboard";
 import { resolveWaiterRequest } from "@/actions/requests";
 import { updateTableStatus } from "@/actions/tables";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmptyState } from "@/components/shared/empty-state";
 import { WAITER_REQUEST_LABEL, timeAgo } from "@/lib/format";
 import { statusColor } from "@/lib/theme/colors";
 import { toast } from "sonner";
-import type { RestaurantTable, WaiterRequest, StaffRole } from "@/lib/types/db";
+import type { RestaurantTable, StaffRole } from "@/lib/types/db";
+import type { WaiterRequestWithTable } from "@/actions/dashboard";
 
 export default function WaiterDashboardPage() {
   const [tables, setTables] = useState<RestaurantTable[]>([]);
-  const [requests, setRequests] = useState<WaiterRequest[]>([]);
+  const [requests, setRequests] = useState<WaiterRequestWithTable[]>([]);
   const [role, setRole] = useState<StaffRole | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -66,13 +67,13 @@ export default function WaiterDashboardPage() {
         "postgres_changes",
         { event: "*", schema: "public", table: "waiter_requests" },
         (payload) => {
-          const req = payload.new as WaiterRequest;
+          const req = payload.new as WaiterRequestWithTable;
           if (payload.eventType === "INSERT" && req.status === "PENDING") {
-            setRequests((prev) => [req, ...prev]);
+            setRequests((prev) => [{ ...req, table_name: prev.find((r) => r.table_id === req.table_id)?.table_name }, ...prev]);
           } else if (payload.eventType === "UPDATE") {
             setRequests((prev) =>
               prev
-                .map((r) => (r.id === req.id ? req : r))
+                .map((r) => (r.id === req.id ? { ...r, ...req } : r))
                 .filter((r) => r.status === "PENDING"),
             );
           }
@@ -245,26 +246,37 @@ export default function WaiterDashboardPage() {
   );
 }
 
-function RequestCard({ req, onResolve }: { req: WaiterRequest; onResolve: () => void }) {
+function RequestCard({ req, onResolve }: { req: WaiterRequestWithTable; onResolve: () => void }) {
+  const color = statusColor(req.type);
   return (
-    <Card>
-      <CardContent className="flex items-center justify-between p-3 gap-3">
-        <div className="space-y-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <Badge
-              variant="secondary"
-              className="text-xs"
-              style={{ backgroundColor: statusColor(req.type) + "18", color: statusColor(req.type) }}
+    <Card className="overflow-hidden border-border/50">
+      <div className="h-1" style={{ backgroundColor: color }} />
+      <CardContent className="p-3.5 space-y-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <span
+              className="flex size-7 shrink-0 items-center justify-center rounded-lg text-xs"
+              style={{ backgroundColor: color + "18", color }}
             >
-              {WAITER_REQUEST_LABEL[req.type] ?? req.type}
-            </Badge>
-            <span className="text-[10px] text-muted-foreground">{timeAgo(req.created_at)}</span>
+              <Bell className="size-3.5" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-foreground truncate">
+                {WAITER_REQUEST_LABEL[req.type] ?? req.type}
+              </p>
+              <p className="text-xs text-muted-foreground truncate">
+                Table {req.table_name ?? req.table_id.slice(0, 8)}
+              </p>
+            </div>
           </div>
-          <p className="text-xs text-muted-foreground">Table {req.table_id.slice(0, 8)}</p>
+          <Button size="sm" onClick={onResolve} className="shrink-0 h-8">
+            <CheckCircle2 className="mr-1 size-3.5" /> Resolve
+          </Button>
         </div>
-        <Button size="sm" onClick={onResolve} className="shrink-0">
-          <CheckCircle2 className="mr-1 size-3.5" /> Resolve
-        </Button>
+        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+          <Clock className="size-3" />
+          {timeAgo(req.created_at)}
+        </div>
       </CardContent>
     </Card>
   );
@@ -331,6 +343,11 @@ function TableCard({
             )}
           </div>
         )}
+        <Link href={`/menu?table=${table.id}`} prefetch={true}>
+          <Button size="sm" className="w-full h-8 text-xs">
+            <Plus className="mr-1.5 size-3" /> Place Order
+          </Button>
+        </Link>
         {canManageStatus && onSetStatus && (
           <div className="pt-0.5">
             <select

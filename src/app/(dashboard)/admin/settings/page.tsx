@@ -53,7 +53,7 @@ export default function SettingsPage() {
       phone: fd.get("phone"),
       email: fd.get("email"),
       tax_rate_percent: fd.get("tax_rate_percent"),
-      service_charge_percent: fd.get("service_charge_percent"),
+      service_charge_amount: fd.get("service_charge_amount"),
       receipt_footer: fd.get("receipt_footer"),
     });
     toast[res.ok ? "success" : "error"](res.ok ? "Settings saved" : res.error);
@@ -91,7 +91,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="w-full max-w-5xl mx-auto px-4 space-y-6">
+    <div className="w-full space-y-6">
       <div className="flex items-center gap-2">
         <Settings className="size-6 text-primary" />
         <h1 className="text-xl font-bold text-app-ink">Restaurant Settings</h1>
@@ -179,14 +179,13 @@ export default function SettingsPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="service_charge_percent">Service Charge (%)</Label>
+                  <Label htmlFor="service_charge_amount">Service Charge (PKR)</Label>
                   <Input
-                    id="service_charge_percent"
-                    name="service_charge_percent"
+                    id="service_charge_amount"
+                    name="service_charge_amount"
                     type="number"
                     min={0}
-                    max={100}
-                    defaultValue={settings.service_charge_percent}
+                    defaultValue={settings.service_charge_amount}
                     placeholder="0"
                     className="rounded-md h-10"
                   />

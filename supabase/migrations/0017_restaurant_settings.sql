@@ -10,7 +10,7 @@ create table if not exists restaurant_settings (
   phone                  text,
   email                  text,
   tax_rate_percent       int  not null default 0,
-  service_charge_percent int  not null default 0,
+  service_charge_amount  int  not null default 0,
   receipt_footer         text,
   updated_at             timestamptz not null default now()
 );

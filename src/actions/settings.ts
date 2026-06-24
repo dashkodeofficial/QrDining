@@ -19,6 +19,25 @@ export async function getSettings(): Promise<ActionResult<RestaurantSettings>> {
   return { ok: true, data };
 }
 
+export interface PublicSettings {
+  tax_rate_percent: number;
+  service_charge_amount: number;
+}
+
+export async function getPublicSettings(): Promise<PublicSettings> {
+  const supabase = createAdminClient();
+  const { data } = await supabase
+    .from("restaurant_settings")
+    .select("tax_rate_percent, service_charge_amount")
+    .limit(1)
+    .maybeSingle();
+
+  return {
+    tax_rate_percent: data?.tax_rate_percent ?? 0,
+    service_charge_amount: data?.service_charge_amount ?? 0,
+  };
+}
+
 export async function updateSettings(raw: unknown): Promise<ActionResult> {
   const auth = await requireCapability("settings.manage");
   if (!auth.ok) return auth;
@@ -44,7 +63,7 @@ export async function updateSettings(raw: unknown): Promise<ActionResult> {
         phone: parsed.data.phone || null,
         email: parsed.data.email || null,
         tax_rate_percent: parsed.data.tax_rate_percent,
-        service_charge_percent: parsed.data.service_charge_percent,
+        service_charge_amount: parsed.data.service_charge_amount,
         receipt_footer: parsed.data.receipt_footer || null,
         updated_at: new Date().toISOString(),
       })
@@ -57,7 +76,7 @@ export async function updateSettings(raw: unknown): Promise<ActionResult> {
       phone: parsed.data.phone || null,
       email: parsed.data.email || null,
       tax_rate_percent: parsed.data.tax_rate_percent,
-      service_charge_percent: parsed.data.service_charge_percent,
+      service_charge_amount: parsed.data.service_charge_amount,
       receipt_footer: parsed.data.receipt_footer || null,
     });
     if (error) return { ok: false, error: "Could not create settings." };

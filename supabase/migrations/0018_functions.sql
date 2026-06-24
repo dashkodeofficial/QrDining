@@ -14,32 +14,6 @@ end;
 $$ language plpgsql;
 
 -- ---------------------------------------------------------------------------
--- Inventory decrement when an order item is inserted
--- ---------------------------------------------------------------------------
-create or replace function decrement_inventory_on_order() returns trigger as $$
-declare
-  stocked_count int;
-begin
-  select quantity into stocked_count
-    from inventory
-    where menu_item_id = new.menu_item_id
-    for update;
-
-  if found then
-    update inventory
-      set quantity = greatest(quantity - new.quantity, 0)
-      where menu_item_id = new.menu_item_id;
-
-    if stocked_count - new.quantity <= 0 then
-      update menu_items set available = false where id = new.menu_item_id;
-    end if;
-  end if;
-
-  return new;
-end;
-$$ language plpgsql security definer;
-
--- ---------------------------------------------------------------------------
 -- Staff helpers used by RLS policies
 -- ---------------------------------------------------------------------------
 create or replace function current_staff_role() returns staff_role

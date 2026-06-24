@@ -72,7 +72,7 @@ select recreate_policy('roles', 'roles_staff_read');
 create policy roles_staff_read on roles for select to authenticated using (true);
 
 -- ---------------------------------------------------------------------------
--- WAITER REQUESTS / FEEDBACK / PAYMENTS / INVENTORY / ACTIVITY LOGS
+-- WAITER REQUESTS / FEEDBACK / PAYMENTS / ACTIVITY LOGS
 -- ---------------------------------------------------------------------------
 select recreate_policy('waiter_requests', 'requests_staff_all');
 create policy requests_staff_all on waiter_requests for all to authenticated
@@ -83,10 +83,6 @@ create policy feedback_staff_read on feedback for select to authenticated using 
 
 select recreate_policy('payments', 'payments_staff_all');
 create policy payments_staff_all on payments for all to authenticated
-  using (true) with check (true);
-
-select recreate_policy('inventory', 'inventory_staff_all');
-create policy inventory_staff_all on inventory for all to authenticated
   using (true) with check (true);
 
 select recreate_policy('activity_logs', 'logs_staff_read');

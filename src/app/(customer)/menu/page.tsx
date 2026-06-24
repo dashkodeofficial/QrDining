@@ -12,7 +12,13 @@ export const dynamic = "force-dynamic";
  * Only available items (RLS + available=true filter) are returned to the
  * customer.
  */
-export default async function MenuPage() {
+export default async function MenuPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ table?: string }>;
+}) {
+  const params = await searchParams;
+  const initialTableId = params.table ?? null;
   const supabase = await createServerClientFromCookies();
 
   const [categoriesRes, itemsRes, settingsRes] = await Promise.all([
@@ -27,7 +33,7 @@ export default async function MenuPage() {
       .order("sort_order", { ascending: true }),
     supabase
       .from("restaurant_settings")
-      .select("name")
+      .select("name, tax_rate_percent, service_charge_amount")
       .limit(1)
       .maybeSingle(),
   ]);
@@ -35,6 +41,8 @@ export default async function MenuPage() {
   const categories = categoriesRes.data ?? [];
   const items = itemsRes.data ?? [];
   const restaurantName = settingsRes.data?.name ?? "Restaurant";
+  const taxRatePercent = settingsRes.data?.tax_rate_percent ?? 0;
+  const serviceChargeAmount = settingsRes.data?.service_charge_amount ?? 0;
 
   return (
     <>
@@ -56,7 +64,7 @@ export default async function MenuPage() {
       </div>
 
       <Suspense fallback={<MenuSkeleton />}>
-        <MenuContent categories={categories} items={items} restaurantName={restaurantName} />
+        <MenuContent categories={categories} items={items} restaurantName={restaurantName} taxRatePercent={taxRatePercent} serviceChargeAmount={serviceChargeAmount} initialTableId={initialTableId} />
       </Suspense>
     </>
   );

@@ -11,13 +11,17 @@ import type { ReactNode } from "react";
  * Used by the dashboard guard to redirect unauthorized staff.
  */
 const ROUTE_CAPABILITIES: { prefix: string; cap: Capability }[] = [
+  { prefix: "/admin/orders", cap: "orders.manage" },
   { prefix: "/admin/menu", cap: "menu.manage" },
   { prefix: "/admin/tables", cap: "tables.manage" },
   { prefix: "/admin/staff", cap: "staff.manage" },
-  { prefix: "/admin/inventory", cap: "menu.manage" },
   { prefix: "/admin/settings", cap: "settings.manage" },
   { prefix: "/admin/reports", cap: "reports.view" },
   { prefix: "/admin", cap: "orders.manage" },
+  { prefix: "/spin-win/vouchers", cap: "spin.manage" },
+  { prefix: "/spin-win/rewards", cap: "spin.manage" },
+  { prefix: "/spin-win/wheel", cap: "spin.play" },
+  { prefix: "/spin-win", cap: "spin.play" },
   { prefix: "/kitchen", cap: "kitchen.view" },
   { prefix: "/waiter", cap: "waiter.view" },
   { prefix: "/cashier", cap: "payments.manage" },
@@ -70,7 +74,9 @@ export default async function DashboardLayout({
       <DashboardSidebar role={role} fullName={staff.full_name} />
       {/* Main content — offset on mobile for the fixed top bar */}
       <div className="flex flex-1 flex-col min-w-0 pt-14 lg:pt-0">
-        <main className="flex-1 px-4 py-6 lg:px-8">{children}</main>
+        <main className="flex-1 px-4 py-6 lg:px-8">
+          <div className="mx-auto max-w-7xl">{children}</div>
+        </main>
       </div>
     </div>
   );

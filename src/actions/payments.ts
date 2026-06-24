@@ -144,7 +144,11 @@ export async function completePayment(paymentId: string): Promise<ActionResult> 
 
   const { error } = await supabase
     .from("payments")
-    .update({ status: "COMPLETED", paid_at: new Date().toISOString() })
+    .update({
+      status: "COMPLETED",
+      paid_at: new Date().toISOString(),
+      processed_by: auth.staff.id,
+    })
     .eq("id", paymentId);
 
   if (error) return { ok: false, error: "Could not complete payment." };
@@ -162,52 +166,109 @@ export async function completePayment(paymentId: string): Promise<ActionResult> 
   return { ok: true, data: undefined };
 }
 
+export interface InvoiceData {
+  sessionId: string;
+  tableName: string;
+  items: { name: string; quantity: number; unit_price_cents: number; notes: string | null }[];
+  subtotalCents: number;
+  taxRatePercent: number;
+  taxCents: number;
+  serviceChargeCents: number;
+  totalCents: number;
+  restaurant: {
+    name: string;
+    address: string | null;
+    phone: string | null;
+    receipt_footer: string | null;
+  };
+  payment: {
+    method: string;
+    status: string;
+    created_at: string;
+    paid_at: string | null;
+  } | null;
+}
+
 /**
  * Generate a printable invoice for a table session. Returns the order total,
- * items, and payment details.
+ * items, restaurant details, and payment info for a premium invoice layout.
  */
 export async function getInvoice(
   tableSessionId: string,
-): Promise<
-  ActionResult<{
-    sessionId: string;
-    tableName: string;
-    items: { name: string; quantity: number; unit_price_cents: number; notes: string | null }[];
-    totalCents: number;
-  }>
-> {
+): Promise<ActionResult<InvoiceData>> {
   const auth = await requireCapability("payments.manage");
   if (!auth.ok) return auth;
 
   const supabase = createAdminClient();
 
-  const { data: session } = await supabase
-    .from("table_sessions")
-    .select("table_id, tables(name)")
-    .eq("id", tableSessionId)
-    .maybeSingle();
+  const [sessionRes, ordersRes, settingsRes, paymentRes] = await Promise.all([
+    supabase
+      .from("table_sessions")
+      .select("table_id, tables(name)")
+      .eq("id", tableSessionId)
+      .maybeSingle(),
+    supabase
+      .from("orders")
+      .select("id, total_cents, status, order_items(*)")
+      .eq("table_session_id", tableSessionId)
+      .neq("status", "CANCELLED"),
+    supabase
+      .from("restaurant_settings")
+      .select("name, address, phone, receipt_footer, tax_rate_percent, service_charge_amount")
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("payments")
+      .select("method, status, created_at, paid_at")
+      .eq("table_session_id", tableSessionId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
 
-  if (!session) return { ok: false, error: "Session not found." };
+  if (!sessionRes.data) return { ok: false, error: "Session not found." };
 
-  const { data: orders } = await supabase
-    .from("orders")
-    .select("id, total_cents, status, order_items(*)")
-    .eq("table_session_id", tableSessionId)
-    .neq("status", "CANCELLED");
-
-  const tableName = (session.tables as any)?.name ?? "Table";
+  const tableName = (sessionRes.data.tables as any)?.name ?? "Table";
   const items: { name: string; quantity: number; unit_price_cents: number; notes: string | null }[] = [];
-  let totalCents = 0;
+  let subtotalCents = 0;
 
-  for (const order of orders ?? []) {
-    totalCents += order.total_cents;
+  for (const order of ordersRes.data ?? []) {
     for (const item of (order as any).order_items ?? []) {
       items.push(item);
+      subtotalCents += item.unit_price_cents * item.quantity;
     }
   }
 
+  const taxRatePercent = settingsRes.data?.tax_rate_percent ?? 0;
+  const serviceChargeCents = settingsRes.data?.service_charge_amount ?? 0;
+  const taxCents = Math.round(subtotalCents * taxRatePercent / 100);
+  const totalCents = subtotalCents + taxCents + serviceChargeCents;
+
   return {
     ok: true,
-    data: { sessionId: tableSessionId, tableName, items, totalCents },
+    data: {
+      sessionId: tableSessionId,
+      tableName,
+      items,
+      subtotalCents,
+      taxRatePercent,
+      taxCents,
+      serviceChargeCents,
+      totalCents,
+      restaurant: {
+        name: settingsRes.data?.name ?? "Restaurant",
+        address: settingsRes.data?.address ?? null,
+        phone: settingsRes.data?.phone ?? null,
+        receipt_footer: settingsRes.data?.receipt_footer ?? null,
+      },
+      payment: paymentRes.data
+        ? {
+            method: paymentRes.data.method,
+            status: paymentRes.data.status,
+            created_at: paymentRes.data.created_at,
+            paid_at: paymentRes.data.paid_at,
+          }
+        : null,
+    },
   };
 }

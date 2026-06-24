@@ -46,5 +46,5 @@ export default async function CustomerLayout({ children }: { children: ReactNode
 async function checkAdminAccess(): Promise<boolean> {
   const staff = await getCurrentStaff();
   if (!staff) return false;
-  return can(staff.role, "orders.manage");
+  return can(staff.role, "waiter.view");
 }

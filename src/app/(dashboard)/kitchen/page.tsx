@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChefHat, Clock, AlertCircle } from "lucide-react";
+import { ChefHat, Clock, AlertCircle, RefreshCw, Utensils } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { getActiveOrders } from "@/actions/dashboard";
 import { advanceOrderStatus } from "@/actions/orders";
@@ -20,9 +20,9 @@ import type { OrderItem } from "@/lib/types/db";
 const ACTIVE_STATUSES = ["PLACED", "ACCEPTED", "PREPARING", "READY"];
 
 const COLUMNS = [
-  { key: "new", label: "New Orders", statuses: ["PLACED", "ACCEPTED"] as string[], headerClass: "bg-amber-50 text-amber-800 dark:bg-amber-950/30 dark:text-amber-300" },
-  { key: "preparing", label: "Preparing", statuses: ["PREPARING"] as string[], headerClass: "bg-blue-50 text-blue-800 dark:bg-blue-950/30 dark:text-blue-300" },
-  { key: "ready", label: "Ready", statuses: ["READY"] as string[], headerClass: "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-300" },
+  { key: "new", label: "New Orders", icon: "📥", statuses: ["PLACED", "ACCEPTED"] as string[], accent: "bg-amber-500", headerBg: "bg-amber-50 dark:bg-amber-950/30", headerText: "text-amber-700 dark:text-amber-300", countBg: "bg-amber-500", countText: "text-white" },
+  { key: "preparing", label: "Preparing", icon: "🍳", statuses: ["PREPARING"] as string[], accent: "bg-blue-500", headerBg: "bg-blue-50 dark:bg-blue-950/30", headerText: "text-blue-700 dark:text-blue-300", countBg: "bg-blue-500", countText: "text-white" },
+  { key: "ready", label: "Ready", icon: "✅", statuses: ["READY"] as string[], accent: "bg-emerald-500", headerBg: "bg-emerald-50 dark:bg-emerald-950/30", headerText: "text-emerald-700 dark:text-emerald-300", countBg: "bg-emerald-500", countText: "text-white" },
 ];
 
 export default function KitchenDashboardPage() {
@@ -88,7 +88,26 @@ export default function KitchenDashboardPage() {
     const res = await advanceOrderStatus(orderId);
     if (!res.ok) {
       toast.error(res.error);
+      return;
     }
+    // Optimistically update local state so the board reflects the change immediately
+    setOrders((prev) =>
+      prev
+        .map((o) => (o.id === orderId ? { ...o, status: res.data.status } : o))
+        .filter((o) => ACTIVE_STATUSES.includes(o.status)),
+    );
+  }
+
+  async function handleRefresh() {
+    setLoading(true);
+    const res = await getActiveOrders();
+    if (res.ok) {
+      setOrders(res.data);
+      toast.success("Orders refreshed");
+    } else {
+      toast.error(res.error);
+    }
+    setLoading(false);
   }
 
   if (loading) {
@@ -117,6 +136,10 @@ export default function KitchenDashboardPage() {
             <p className="text-xs text-muted-foreground">{orders.length} active order{orders.length !== 1 ? "s" : ""}</p>
           </div>
         </div>
+        <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loading}>
+          <RefreshCw className={`mr-1.5 size-4 ${loading ? "animate-spin" : ""}`} />
+          Refresh
+        </Button>
       </div>
 
       {/* Desktop: 3-column Kanban */}
@@ -125,10 +148,12 @@ export default function KitchenDashboardPage() {
           const colOrders = orders.filter((o) => col.statuses.includes(o.status));
           return (
             <div key={col.key} className="flex flex-col gap-3">
-              <div className={`flex items-center justify-between rounded-lg px-3 py-2 ${col.headerClass}`}>
-                <span className="text-sm font-semibold">{col.label}</span>
+              <div className={`flex items-center gap-2.5 rounded-xl px-4 py-3 ${col.headerBg}`}>
+                <div className={`h-8 w-1 rounded-full ${col.accent}`} />
+                <span className="text-base">{col.icon}</span>
+                <span className={`text-sm font-bold ${col.headerText}`}>{col.label}</span>
                 {colOrders.length > 0 && (
-                  <span className="flex size-5 items-center justify-center rounded-full bg-white/80 text-xs font-bold text-foreground">
+                  <span className={`ml-auto flex size-6 items-center justify-center rounded-full ${col.countBg} ${col.countText} text-xs font-bold`}>
                     {colOrders.length}
                   </span>
                 )}
@@ -204,9 +229,15 @@ function OrderCard({
     }>
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-2">
-          <div>
+          <div className="space-y-1">
             <p className="font-bold text-base">#{order.id.slice(0, 8).toUpperCase()}</p>
-            <div className="flex items-center gap-2 mt-0.5">
+            {order.table_name && (
+              <div className="flex items-center gap-1.5">
+                <Utensils className="size-3 text-muted-foreground" />
+                <span className="text-xs font-semibold text-muted-foreground">{order.table_name}</span>
+              </div>
+            )}
+            <div className="flex items-center gap-2">
               <Clock className={`size-3 ${isDelayed ? "text-warning" : "text-muted-foreground"}`} />
               <span className={`text-xs ${isDelayed ? "text-warning font-medium" : "text-muted-foreground"}`}>
                 {timeAgo(order.created_at)}
@@ -255,7 +286,7 @@ function OrderCard({
         )}
         <Button
           size="sm"
-          className="w-full"
+          className="w-full h-9"
           variant={order.status === "READY" ? "outline" : "default"}
           onClick={() => onAdvance(order.id)}
         >

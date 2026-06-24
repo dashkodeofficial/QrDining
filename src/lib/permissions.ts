@@ -22,20 +22,22 @@ export type Capability =
   | "activity.view"
   | "staff.manage"
   | "tables.manage"
-  | "settings.manage";
+  | "settings.manage"
+  | "spin.manage"
+  | "spin.play";
 
 const MATRIX: Record<StaffRole, Capability[]> = {
   ADMIN: [
     "menu.manage", "menu.view", "orders.manage", "tables.view", "tables.manage",
     "kitchen.view", "waiter.view", "payments.manage", "reports.view", "activity.view",
-    "staff.manage", "settings.manage",
+    "staff.manage", "settings.manage", "spin.manage", "spin.play",
   ],
   MANAGER: [
     "menu.manage", "menu.view", "orders.manage", "tables.view", "kitchen.view",
-    "waiter.view", "reports.view", "activity.view",
+    "waiter.view", "reports.view", "activity.view", "spin.manage", "spin.play",
   ],
   KITCHEN: ["kitchen.view", "orders.manage"],
-  WAITER: ["tables.view", "waiter.view", "orders.manage"],
+  WAITER: ["tables.view", "waiter.view", "orders.manage", "spin.play"],
   CASHIER: ["payments.manage", "tables.view"],
 };
 

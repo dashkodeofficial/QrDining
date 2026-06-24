@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, use } from "react";
-import { ArrowLeft, Bell, Receipt, Star } from "lucide-react";
+import { ArrowLeft, Bell, Receipt, Star, CheckCircle2, Loader2, AlertCircle, UtensilsCrossed, ConciergeBell, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
@@ -10,12 +10,12 @@ import { Price } from "@/components/shared/price";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -39,6 +39,11 @@ export default function OrderDetailPage({
   const [error, setError] = useState<string | null>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [paid, setPaid] = useState(false);
+  const [taxRatePercent, setTaxRatePercent] = useState(0);
+  const [serviceChargeAmount, setServiceChargeAmount] = useState(0);
+  const [waiterStatus, setWaiterStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [billStatus, setBillStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [requestError, setRequestError] = useState("");
 
   // Load order + items + subscribe to realtime updates
   useEffect(() => {
@@ -59,6 +64,8 @@ export default function OrderDetailPage({
       setOrder(detailRes.data.order);
       setItems(detailRes.data.items);
       setPaid(paymentRes.ok ? paymentRes.data : false);
+      setTaxRatePercent(detailRes.data.taxRatePercent);
+      setServiceChargeAmount(detailRes.data.serviceChargeAmount);
       setLoading(false);
     }
 
@@ -96,6 +103,9 @@ export default function OrderDetailPage({
 
   // Feedback gating: only after SERVED or COMPLETED AND payment completed
   const showFeedback = order && ["SERVED", "COMPLETED"].includes(order.status) && paid;
+
+  const subtotalCents = items.reduce((sum, i) => sum + i.unit_price_cents * i.quantity, 0);
+  const taxCents = Math.round(subtotalCents * taxRatePercent / 100);
 
   if (loading) {
     return (
@@ -207,11 +217,62 @@ export default function OrderDetailPage({
             ))}
           </div>
           <Separator className="my-4" />
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Subtotal</span>
+              <Price cents={subtotalCents} className="font-semibold text-app-ink" />
+            </div>
+            {taxRatePercent > 0 && (
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Tax ({taxRatePercent}%)</span>
+                <Price cents={taxCents} />
+              </div>
+            )}
+            {serviceChargeAmount > 0 && (
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Service Charge</span>
+                <Price cents={serviceChargeAmount} />
+              </div>
+            )}
+          </div>
+          <Separator className="my-4" />
           <div className="flex justify-between text-sm font-bold">
             <span className="text-app-ink">Total</span>
             <Price cents={order.total_cents} className="text-lg font-extrabold text-primary" />
           </div>
         </div>
+
+        {/* Request status banners */}
+        {waiterStatus === "sent" && (
+          <div className="flex items-center gap-2.5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-900/50 dark:bg-emerald-950/30">
+            <CheckCircle2 className="size-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+            <div>
+              <p className="text-sm font-bold text-emerald-800 dark:text-emerald-300">Waiter has been called</p>
+              <p className="text-xs text-emerald-600 dark:text-emerald-400">A staff member will be with you shortly.</p>
+            </div>
+          </div>
+        )}
+        {waiterStatus === "error" && (
+          <div className="flex items-center gap-2.5 rounded-2xl border border-destructive/20 bg-destructive/10 px-4 py-3">
+            <AlertCircle className="size-5 shrink-0 text-destructive" />
+            <p className="text-sm font-medium text-destructive">{requestError}</p>
+          </div>
+        )}
+        {billStatus === "sent" && (
+          <div className="flex items-center gap-2.5 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-900/50 dark:bg-emerald-950/30">
+            <CheckCircle2 className="size-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+            <div>
+              <p className="text-sm font-bold text-emerald-800 dark:text-emerald-300">Bill has been requested</p>
+              <p className="text-xs text-emerald-600 dark:text-emerald-400">Your bill will be prepared and brought to your table.</p>
+            </div>
+          </div>
+        )}
+        {billStatus === "error" && (
+          <div className="flex items-center gap-2.5 rounded-2xl border border-destructive/20 bg-destructive/10 px-4 py-3">
+            <AlertCircle className="size-5 shrink-0 text-destructive" />
+            <p className="text-sm font-medium text-destructive">{requestError}</p>
+          </div>
+        )}
 
         {/* Quick actions */}
         <div className="flex gap-3">
@@ -219,27 +280,51 @@ export default function OrderDetailPage({
             variant="outline"
             className="flex-1 rounded-xl"
             size="default"
+            disabled={waiterStatus === "sending" || waiterStatus === "sent"}
             onClick={async () => {
+              setWaiterStatus("sending");
+              setRequestError("");
               const res = await createWaiterRequest("CALL_WAITER");
-              toast[res.ok ? "success" : "error"](
-                res.ok ? "Waiter called!" : res.error,
-              );
+              if (res.ok) {
+                setWaiterStatus("sent");
+              } else {
+                setWaiterStatus("error");
+                setRequestError(res.error);
+              }
             }}
           >
-            <Bell className="size-4 mr-1.5" /> Call Waiter
+            {waiterStatus === "sending" ? (
+              <><Loader2 className="size-4 mr-1.5 animate-spin" /> Calling...</>
+            ) : waiterStatus === "sent" ? (
+              <><CheckCircle2 className="size-4 mr-1.5" /> Called ✓</>
+            ) : (
+              <><Bell className="size-4 mr-1.5" /> Call Waiter</>
+            )}
           </Button>
           <Button
             variant="outline"
             className="flex-1 rounded-xl"
             size="default"
+            disabled={billStatus === "sending" || billStatus === "sent"}
             onClick={async () => {
+              setBillStatus("sending");
+              setRequestError("");
               const res = await createWaiterRequest("REQUEST_BILL");
-              toast[res.ok ? "success" : "error"](
-                res.ok ? "Bill requested!" : res.error,
-              );
+              if (res.ok) {
+                setBillStatus("sent");
+              } else {
+                setBillStatus("error");
+                setRequestError(res.error);
+              }
             }}
           >
-            <Receipt className="size-4 mr-1.5" /> Request Bill
+            {billStatus === "sending" ? (
+              <><Loader2 className="size-4 mr-1.5 animate-spin" /> Requesting...</>
+            ) : billStatus === "sent" ? (
+              <><CheckCircle2 className="size-4 mr-1.5" /> Requested ✓</>
+            ) : (
+              <><Receipt className="size-4 mr-1.5" /> Request Bill</>
+            )}
           </Button>
         </div>
 
@@ -252,9 +337,12 @@ export default function OrderDetailPage({
                   <Star className="size-4 mr-1.5" /> Leave Feedback
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-sm rounded-2xl">
+              <DialogContent className="max-w-md rounded-2xl">
                 <DialogHeader>
-                  <DialogTitle>How was everything?</DialogTitle>
+                  <DialogTitle className="text-center text-lg font-bold">How was your experience?</DialogTitle>
+                  <DialogDescription className="text-center text-sm">
+                    We'd love to hear your feedback to serve you better.
+                  </DialogDescription>
                 </DialogHeader>
                 <FeedbackForm
                   orderId={order.id}
@@ -288,6 +376,34 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+function StarRating({ value, onChange, name }: { value: number; onChange: (v: number) => void; name: string }) {
+  const [hover, setHover] = useState(0);
+  return (
+    <div className="flex gap-1.5">
+      {[1, 2, 3, 4, 5].map((v) => (
+        <button
+          key={v}
+          type="button"
+          onClick={() => onChange(v)}
+          onMouseEnter={() => setHover(v)}
+          onMouseLeave={() => setHover(0)}
+          className="transition-transform hover:scale-110"
+          aria-label={`${v} star${v > 1 ? "s" : ""}`}
+        >
+          <Star
+            className={cn(
+              "size-8 transition-colors",
+              (hover || value) >= v
+                ? "fill-amber-400 text-amber-400"
+                : "fill-transparent text-muted-foreground/30",
+            )}
+          />
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function FeedbackForm({
   orderId,
   onClose,
@@ -295,70 +411,103 @@ function FeedbackForm({
   orderId: string;
   onClose: () => void;
 }) {
-  const [food, setFood] = useState("3");
-  const [service, setService] = useState("3");
+  const [food, setFood] = useState(0);
+  const [service, setService] = useState(0);
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (food === 0 || service === 0) {
+      toast.error("Please rate both food and service.");
+      return;
+    }
     setSubmitting(true);
     const res = await submitFeedback({
-      food_rating: Number(food),
-      service_rating: Number(service),
+      food_rating: food,
+      service_rating: service,
       comment,
     });
     if (res.ok) {
-      toast.success("Thank you for your feedback!");
-      onClose();
+      setSubmitted(true);
     } else {
       toast.error(res.error);
     }
     setSubmitting(false);
   }
 
+  if (submitted) {
+    return (
+      <div className="flex flex-col items-center gap-4 py-8 text-center">
+        <div className="flex size-16 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950/40">
+          <CheckCircle2 className="size-8 text-emerald-600 dark:text-emerald-400" />
+        </div>
+        <div className="space-y-1.5">
+          <p className="text-lg font-bold text-foreground">Thank you!</p>
+          <p className="text-sm text-muted-foreground max-w-xs">
+            Your feedback helps us improve. We hope to see you again soon!
+          </p>
+        </div>
+        <Button variant="outline" className="rounded-xl" onClick={onClose}>
+          Close
+        </Button>
+      </div>
+    );
+  }
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="space-y-2">
-        <Label>Food Rating</Label>
-        <RadioGroup value={food} onValueChange={setFood} className="flex gap-1">
-          {[1, 2, 3, 4, 5].map((v) => (
-            <Label
-              key={v}
-              htmlFor={`food-${v}`}
-              className="flex size-9 cursor-pointer items-center justify-center rounded-full border border-border text-sm font-medium transition-colors has-[[checked]]:border-primary has-[[checked]]:bg-primary has-[[checked]]:text-primary-foreground"
-            >
-              <RadioGroupItem value={String(v)} id={`food-${v}`} className="sr-only" />
-              {v}
-            </Label>
-          ))}
-        </RadioGroup>
+    <form onSubmit={handleSubmit} className="space-y-5">
+      {/* Food rating */}
+      <div className="space-y-2.5">
+        <div className="flex items-center gap-2">
+          <UtensilsCrossed className="size-4 text-primary" />
+          <Label className="text-sm font-semibold">How was the food?</Label>
+        </div>
+        <StarRating value={food} onChange={setFood} name="food" />
       </div>
-      <div className="space-y-2">
-        <Label>Service Rating</Label>
-        <RadioGroup value={service} onValueChange={setService} className="flex gap-1">
-          {[1, 2, 3, 4, 5].map((v) => (
-            <Label
-              key={v}
-              htmlFor={`service-${v}`}
-              className="flex size-9 cursor-pointer items-center justify-center rounded-full border border-border text-sm font-medium transition-colors has-[[checked]]:border-primary has-[[checked]]:bg-primary has-[[checked]]:text-primary-foreground"
-            >
-              <RadioGroupItem value={String(v)} id={`service-${v}`} className="sr-only" />
-              {v}
-            </Label>
-          ))}
-        </RadioGroup>
+
+      {/* Service rating */}
+      <div className="space-y-2.5">
+        <div className="flex items-center gap-2">
+          <ConciergeBell className="size-4 text-primary" />
+          <Label className="text-sm font-semibold">How was the service?</Label>
+        </div>
+        <StarRating value={service} onChange={setService} name="service" />
       </div>
-      <Textarea
-        placeholder="Tell us about your experience..."
-        value={comment}
-        onChange={(e) => setComment(e.target.value)}
-        rows={3}
-        className="rounded-xl"
-      />
-      <Button type="submit" className="w-full rounded-xl" disabled={submitting}>
-        {submitting ? "Submitting..." : "Submit Feedback"}
-      </Button>
+
+      {/* Comment */}
+      <div className="space-y-2.5">
+        <div className="flex items-center gap-2">
+          <Sparkles className="size-4 text-primary" />
+          <Label className="text-sm font-semibold">Anything else? <span className="font-normal text-muted-foreground">(optional)</span></Label>
+        </div>
+        <Textarea
+          placeholder="Tell us about your experience..."
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+          rows={3}
+          className="rounded-xl resize-none"
+        />
+      </div>
+
+      {/* Actions */}
+      <div className="flex gap-3">
+        <Button type="button" variant="outline" className="flex-1 rounded-xl" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button type="submit" className="flex-1 rounded-xl" disabled={submitting}>
+          {submitting ? (
+            <span className="flex items-center gap-2">
+              <Loader2 className="size-4 animate-spin" /> Submitting...
+            </span>
+          ) : (
+            <span className="flex items-center gap-2">
+              <CheckCircle2 className="size-4" /> Submit Feedback
+            </span>
+          )}
+        </Button>
+      </div>
     </form>
   );
 }

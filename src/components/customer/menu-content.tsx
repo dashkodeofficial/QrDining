@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
-import { Search, Star, Plus, ShoppingCart, SlidersHorizontal, ArrowUpDown, Trash2, ArrowRight, Flame, LayoutGrid } from "lucide-react";
+import { Search, Star, Plus, ShoppingCart, SlidersHorizontal, ArrowUpDown, Trash2, ArrowRight, Flame, LayoutGrid, UtensilsCrossed } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
@@ -26,12 +26,16 @@ interface Props {
   categories: Category[];
   items: MenuItem[];
   restaurantName: string;
+  taxRatePercent: number;
+  serviceChargeAmount: number;
+  initialTableId?: string | null;
 }
 
 type SortOption = "recommended" | "price-asc" | "price-desc";
 
-export default function MenuContent({ categories, items, restaurantName }: Props) {
+export default function MenuContent({ categories, items, restaurantName, taxRatePercent, serviceChargeAmount, initialTableId }: Props) {
   const router = useRouter();
+  const { isAdmin, selectedTableId, setSelectedTableId } = useAdmin();
   const [activeSlug, setActiveSlug] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("recommended");
@@ -56,6 +60,14 @@ export default function MenuContent({ categories, items, restaurantName }: Props
   const [placing, setPlacing] = useState(false);
 
   const [isDesktop, setIsDesktop] = useState(false);
+
+  // Auto-select table when initialTableId is provided (waiter placing order)
+  useEffect(() => {
+    if (initialTableId && isAdmin && !selectedTableId) {
+      setSelectedTableId(initialTableId);
+    }
+  }, [initialTableId, isAdmin, selectedTableId, setSelectedTableId]);
+
   useEffect(() => {
     const mq = window.matchMedia("(min-width: 1024px)");
     const handler = (e: MediaQueryListEvent) => setIsDesktop(e.matches);
@@ -64,7 +76,6 @@ export default function MenuContent({ categories, items, restaurantName }: Props
     return () => mq.removeEventListener("change", handler);
   }, []);
 
-  const { isAdmin, selectedTableId, setSelectedTableId } = useAdmin();
   const [tables, setTables] = useState<RestaurantTable[]>([]);
   useEffect(() => {
     if (!isAdmin) return;
@@ -188,6 +199,14 @@ export default function MenuContent({ categories, items, restaurantName }: Props
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8 lg:py-6">
+      {isAdmin && selectedTableId && (
+        <div className="mb-4 flex items-center gap-2 rounded-xl border border-primary/20 bg-primary/5 px-4 py-2.5">
+          <UtensilsCrossed className="size-4 text-primary" />
+          <span className="text-sm font-medium text-primary">
+            Placing order for Table {tables.find((t) => t.id === selectedTableId)?.name ?? selectedTableId.slice(0, 8)}
+          </span>
+        </div>
+      )}
       <div className="flex flex-col gap-6 lg:flex-row lg:gap-8">
         
         {/* ========================================== */}
@@ -524,6 +543,23 @@ export default function MenuContent({ categories, items, restaurantName }: Props
                     <span className="text-muted-foreground">Subtotal</span>
                     <Price cents={totalCents} className="text-base text-foreground" />
                   </div>
+                  {taxRatePercent > 0 && (
+                    <div className="flex justify-between items-center text-xs text-muted-foreground">
+                      <span>Tax ({taxRatePercent}%)</span>
+                      <Price cents={Math.round(totalCents * taxRatePercent / 100)} />
+                    </div>
+                  )}
+                  {serviceChargeAmount > 0 && (
+                    <div className="flex justify-between items-center text-xs text-muted-foreground">
+                      <span>Service Charge</span>
+                      <Price cents={serviceChargeAmount} />
+                    </div>
+                  )}
+                  <Separator />
+                  <div className="flex justify-between items-center text-sm font-extrabold">
+                    <span className="text-foreground">Total</span>
+                    <Price cents={totalCents + Math.round(totalCents * taxRatePercent / 100) + serviceChargeAmount} className="text-primary" />
+                  </div>
                   <Button
                     className="w-full rounded-xl h-11 font-bold"
                     size="lg"
@@ -550,7 +586,7 @@ export default function MenuContent({ categories, items, restaurantName }: Props
       </div>
 
       {/* Floating cart (Mobile only) */}
-      <CartFloat />
+      <CartFloat taxRatePercent={taxRatePercent} serviceChargeAmount={serviceChargeAmount} />
 
       {/* Item Detail Modal — Desktop Dialog only */}
       {isDesktop && (
@@ -654,10 +690,11 @@ function DetailContent({ item, qty, notes, onQtyChange, onNotesChange, onAdd }: 
   );
 }
 
-function CartFloat() {
+function CartFloat({ taxRatePercent, serviceChargeAmount }: { taxRatePercent: number; serviceChargeAmount: number }) {
   const count = useCart((s) => s.count());
   const total = useCart((s) => s.totalCents());
   if (count === 0) return null;
+  const grandTotal = total + Math.round(total * taxRatePercent / 100) + serviceChargeAmount;
   return (
     <a
       href="/cart"
@@ -666,7 +703,7 @@ function CartFloat() {
       <ShoppingCart className="size-4 text-primary-foreground" />
       <span className="text-sm font-bold text-primary-foreground">View Cart ({count})</span>
       <span className="text-sm font-bold text-primary-foreground opacity-80">·</span>
-      <span className="text-sm font-extrabold text-primary-foreground"><Price cents={total} /></span>
+      <span className="text-sm font-extrabold text-primary-foreground"><Price cents={grandTotal} /></span>
     </a>
   );
 }

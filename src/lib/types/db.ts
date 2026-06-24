@@ -147,16 +147,8 @@ export interface Payment {
   method: PaymentMethod;
   status: PaymentStatus;
   processed_by: string | null;
+  paid_at: string | null;
   created_at: string;
-}
-
-export interface Inventory {
-  id: string;
-  menu_item_id: string | null;
-  name: string;
-  quantity: number;
-  low_stock_threshold: number;
-  updated_at: string;
 }
 
 export interface QrToken {
@@ -184,7 +176,7 @@ export interface RestaurantSettings {
   phone: string | null;
   email: string | null;
   tax_rate_percent: number;
-  service_charge_percent: number;
+  service_charge_amount: number;
   receipt_footer: string | null;
   updated_at: string;
 }
@@ -203,4 +195,25 @@ export interface CartLine {
   image_url: string | null;
   quantity: number;
   notes: string;
+}
+
+export type ExpiryType = "WEEKLY" | "MONTHLY" | "CUSTOM";
+
+export interface Reward {
+  id: string;
+  name: string;
+  probability: number;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Voucher {
+  id: string;
+  code: string;
+  expiry_type: ExpiryType;
+  expires_at: string;
+  used_at: string | null;
+  reward_id: string | null;
+  created_at: string;
 }

@@ -11,10 +11,11 @@ import { Price } from "@/components/shared/price";
 import { EmptyState } from "@/components/shared/empty-state";
 import { useCart } from "@/stores/cart";
 import { placeOrder } from "@/actions/orders";
+import { getPublicSettings } from "@/actions/settings";
 import { useAdmin } from "@/components/customer/admin-context";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function CartPage() {
   const router = useRouter();
@@ -28,6 +29,18 @@ export default function CartPage() {
   const [orderNotes, setOrderNotes] = useState("");
   const [placing, setPlacing] = useState(false);
   const { isAdmin, selectedTableId } = useAdmin();
+  const [taxRatePercent, setTaxRatePercent] = useState(0);
+  const [serviceChargeAmount, setServiceChargeAmount] = useState(0);
+
+  useEffect(() => {
+    getPublicSettings().then((s) => {
+      setTaxRatePercent(s.tax_rate_percent);
+      setServiceChargeAmount(s.service_charge_amount);
+    });
+  }, []);
+
+  const taxCents = Math.round(totalCents * taxRatePercent / 100);
+  const grandTotalCents = totalCents + taxCents + serviceChargeAmount;
 
   async function handlePlaceOrder() {
     if (isAdmin && !selectedTableId) {
@@ -156,6 +169,18 @@ export default function CartPage() {
                 <span className="text-muted-foreground">Subtotal ({count} item{count > 1 ? "s" : ""})</span>
                 <Price cents={totalCents} className="font-semibold text-app-ink" />
               </div>
+              {taxRatePercent > 0 && (
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Tax ({taxRatePercent}%)</span>
+                  <Price cents={taxCents} />
+                </div>
+              )}
+              {serviceChargeAmount > 0 && (
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Service Charge</span>
+                  <Price cents={serviceChargeAmount} />
+                </div>
+              )}
             </div>
             <Separator />
             <div className="space-y-2">
@@ -173,7 +198,7 @@ export default function CartPage() {
             <div className="space-y-3">
               <div className="flex justify-between text-base font-bold">
                 <span className="text-app-ink">Total</span>
-                <Price cents={totalCents} className="text-primary" />
+                <Price cents={grandTotalCents} className="text-primary" />
               </div>
               <Button className="h-12 w-full rounded-xl text-sm font-bold" size="lg" onClick={handlePlaceOrder} disabled={placing}>
                 {placing ? (

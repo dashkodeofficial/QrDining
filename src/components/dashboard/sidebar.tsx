@@ -12,13 +12,16 @@ import {
   LayoutGrid,
   Users,
   CookingPot,
-  Package,
+  ShoppingBag,
   BarChart3,
   Settings,
   Activity,
   Bell,
   Banknote,
   ChefHat,
+  Ticket,
+  Gift,
+  CircleDot,
   ChevronLeft,
   ChevronRight,
   Menu,
@@ -56,10 +59,10 @@ const NAV_GROUPS: { label: string; items: NavItemDef[] }[] = [
   {
     label: "Management",
     items: [
+      { href: "/admin/orders", label: "Orders", icon: ShoppingBag, cap: "orders.manage" as const },
       { href: "/admin/menu", label: "Menu", icon: UtensilsCrossed, cap: "menu.manage" as const },
       { href: "/admin/tables", label: "Tables", icon: LayoutGrid, cap: "tables.manage" as const },
       { href: "/admin/staff", label: "Staff", icon: Users, cap: "staff.manage" as const },
-      { href: "/admin/inventory", label: "Inventory", icon: Package, cap: "menu.manage" as const },
     ],
   },
   {
@@ -70,10 +73,17 @@ const NAV_GROUPS: { label: string; items: NavItemDef[] }[] = [
     ],
   },
   {
+    label: "Engagement",
+    items: [
+      { href: "/spin-win/vouchers", label: "Voucher Settings", icon: Ticket, cap: "spin.manage" as const },
+      { href: "/spin-win/rewards", label: "Reward Settings", icon: Gift, cap: "spin.manage" as const },
+      { href: "/spin-win/wheel", label: "Spin Wheel", icon: CircleDot, cap: "spin.play" as const },
+    ],
+  },
+  {
     label: "System",
     items: [
       { href: "/admin/settings", label: "Settings", icon: Settings, cap: "settings.manage" as const },
-      { href: "/menu", label: "Customer Dashboard", icon: ChefHat, cap: "settings.manage" as const, adminOnly: true },
     ],
   },
 ];
@@ -106,6 +116,7 @@ function NavItem({
   return (
     <Link
       href={item.href}
+      prefetch={true}
       onClick={onClick}
       className={cn(
         "group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-150",

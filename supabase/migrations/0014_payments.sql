@@ -10,6 +10,7 @@ create table if not exists payments (
   method            payment_method not null default 'CASH',
   status            payment_status not null default 'PENDING',
   processed_by      uuid references staff(id) on delete set null,
+  paid_at           timestamptz,
   created_at        timestamptz not null default now()
 );
 

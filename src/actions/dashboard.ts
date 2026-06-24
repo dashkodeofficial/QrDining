@@ -7,6 +7,7 @@ import type { Order, OrderItem, RestaurantTable, WaiterRequest, Payment } from "
 
 export interface OrderWithItems extends Order {
   items: OrderItem[];
+  table_name?: string;
 }
 
 export async function getActiveOrders(): Promise<ActionResult<OrderWithItems[]>> {
@@ -16,7 +17,7 @@ export async function getActiveOrders(): Promise<ActionResult<OrderWithItems[]>>
   const supabase = createAdminClient();
   const { data: orders, error } = await supabase
     .from("orders")
-    .select("*")
+    .select("*, tables(name)")
     .in("status", ["PLACED", "ACCEPTED", "PREPARING", "READY"])
     .order("created_at", { ascending: true });
 
@@ -42,6 +43,7 @@ export async function getActiveOrders(): Promise<ActionResult<OrderWithItems[]>>
 
   const data: OrderWithItems[] = orders.map((o) => ({
     ...o,
+    table_name: (o as any).tables?.name,
     items: itemsByOrder.get(o.id) ?? [],
   }));
 
@@ -62,19 +64,27 @@ export async function getTables(): Promise<ActionResult<RestaurantTable[]>> {
   return { ok: true, data: data ?? [] };
 }
 
-export async function getPendingWaiterRequests(): Promise<ActionResult<WaiterRequest[]>> {
+export interface WaiterRequestWithTable extends WaiterRequest {
+  table_name?: string;
+}
+
+export async function getPendingWaiterRequests(): Promise<ActionResult<WaiterRequestWithTable[]>> {
   const auth = await requireCapability("waiter.view");
   if (!auth.ok) return auth;
 
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("waiter_requests")
-    .select("*")
+    .select("*, tables(name)")
     .eq("status", "PENDING")
     .order("created_at", { ascending: true });
 
   if (error) return { ok: false, error: "Could not load requests." };
-  return { ok: true, data: data ?? [] };
+  const result: WaiterRequestWithTable[] = (data ?? []).map((r) => ({
+    ...r,
+    table_name: (r as any).tables?.name,
+  }));
+  return { ok: true, data: result };
 }
 
 export async function getPendingPayments(): Promise<ActionResult<Payment[]>> {

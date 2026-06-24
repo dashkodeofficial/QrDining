@@ -3,6 +3,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getVerifiedSession } from "@/lib/session";
 import { getCurrentStaff } from "@/lib/auth";
+import { getPublicSettings } from "@/actions/settings";
 import type { Order, OrderItem, RestaurantTable } from "@/lib/types/db";
 import type { ActionResult } from "./orders";
 
@@ -64,9 +65,10 @@ export async function getMySessionId(): Promise<ActionResult<string | null>> {
 
 export async function getMyOrderById(
   orderId: string,
-): Promise<ActionResult<{ order: Order; items: OrderItem[] }>> {
+): Promise<ActionResult<{ order: Order; items: OrderItem[]; taxRatePercent: number; serviceChargeAmount: number }>> {
   const session = await getVerifiedSession();
   const supabase = createAdminClient();
+  const settings = await getPublicSettings();
 
   if (session) {
     const [orderRes, itemsRes] = await Promise.all([
@@ -87,7 +89,7 @@ export async function getMyOrderById(
       return { ok: false, error: "Order not found." };
     }
 
-    return { ok: true, data: { order: orderRes.data, items: itemsRes.data ?? [] } };
+    return { ok: true, data: { order: orderRes.data, items: itemsRes.data ?? [], taxRatePercent: settings.tax_rate_percent, serviceChargeAmount: settings.service_charge_amount } };
   }
 
   // Admin fallback: allow viewing any order
@@ -113,7 +115,7 @@ export async function getMyOrderById(
     return { ok: false, error: "Order not found." };
   }
 
-  return { ok: true, data: { order: orderRes.data, items: itemsRes.data ?? [] } };
+  return { ok: true, data: { order: orderRes.data, items: itemsRes.data ?? [], taxRatePercent: settings.tax_rate_percent, serviceChargeAmount: settings.service_charge_amount } };
 }
 
 /**

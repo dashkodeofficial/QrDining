@@ -32,11 +32,3 @@ join (values
 ) as data(slug, name, description, price_cents, popular, sort_order)
   on c.slug = data.slug
 on conflict do nothing;
-
--- Inventory for stocked items (drinks/cans) so the decrement logic is demoable
-insert into inventory (menu_item_id, name, quantity, low_stock_threshold)
-select mi.id, 'Coca-Cola Can', 48, 6 from menu_items mi where mi.name = 'Coca-Cola Can'
-on conflict (menu_item_id) do nothing;
-insert into inventory (menu_item_id, name, quantity, low_stock_threshold)
-select mi.id, 'Bottled Water', 24, 6 from menu_items mi where mi.name = 'Bottled Water'
-on conflict (menu_item_id) do nothing;

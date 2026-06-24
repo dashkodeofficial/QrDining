@@ -7,6 +7,7 @@ import { requireCapability } from "@/lib/auth";
 import { logActivity } from "@/actions/activity";
 import { placeOrderSchema } from "@/lib/validations";
 import { sumCartTotal } from "@/lib/format";
+import { getPublicSettings } from "@/actions/settings";
 import type { OrderStatus } from "@/lib/types/db";
 
 export type ActionResult<T = void> =
@@ -19,7 +20,7 @@ export type ActionResult<T = void> =
  * Trust model: the customer's cart is untrusted. We re-validate the session
  * (anti-spoofing), then for EVERY line item we reload the live menu row and
  * use ITS current price + availability — never the price the browser sent.
- * Total is recomputed server-side. Inventory decrement happens via DB trigger.
+ * Total is recomputed server-side.
  */
 export async function placeOrder(
   raw: unknown,
@@ -77,23 +78,38 @@ export async function placeOrder(
       return { ok: false, error: "No active QR token for this table. Please generate one first." };
     }
 
-    // Create a synthetic session for this admin order
-    const { data: newSession, error: sessionErr } = await supabase
+    // Reuse an existing active session for this table if one exists
+    const { data: existingSession } = await supabase
       .from("table_sessions")
-      .insert({
-        table_id: table.id,
-        qr_token_id: tokenRow.id,
-        status: "ACTIVE",
-      })
       .select("id")
-      .single();
+      .eq("table_id", table.id)
+      .is("ended_at", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-    if (sessionErr || !newSession) {
-      return { ok: false, error: "Could not create a table session. Please try again." };
+    if (existingSession) {
+      tableId = table.id;
+      sessionId = existingSession.id;
+    } else {
+      // No active session — create a new one
+      const { data: newSession, error: sessionErr } = await supabase
+        .from("table_sessions")
+        .insert({
+          table_id: table.id,
+          qr_token_id: tokenRow.id,
+          status: "ACTIVE",
+        })
+        .select("id")
+        .single();
+
+      if (sessionErr || !newSession) {
+        return { ok: false, error: "Could not create a table session. Please try again." };
+      }
+
+      tableId = table.id;
+      sessionId = newSession.id;
     }
-
-    tableId = table.id;
-    sessionId = newSession.id;
   }
 
   const supabase = createAdminClient();
@@ -133,8 +149,11 @@ export async function placeOrder(
     });
   }
 
-  // 4. Server-side total
-  const totalCents = sumCartTotal(orderItems);
+  // 4. Server-side subtotal + grand total (with tax + service charge)
+  const subtotalCents = sumCartTotal(orderItems);
+  const { tax_rate_percent: taxRate, service_charge_amount: serviceCharge } = await getPublicSettings();
+  const taxCents = Math.round(subtotalCents * taxRate / 100);
+  const totalCents = subtotalCents + taxCents + serviceCharge;
 
   // 5. Insert order + items atomically
   const { data: order, error: orderErr } = await supabase
@@ -238,4 +257,158 @@ export async function cancelOrder(orderId: string): Promise<ActionResult> {
   revalidatePath("/kitchen");
   revalidatePath(`/orders/${orderId}`);
   return { ok: true, data: undefined };
+}
+
+export interface OrderHistoryItem {
+  id: string;
+  table_id: string;
+  table_session_id: string;
+  status: OrderStatus;
+  total_cents: number;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  table_name: string | null;
+  item_count: number;
+}
+
+export interface PaginatedOrders {
+  orders: OrderHistoryItem[];
+  total: number;
+}
+
+export async function getAllOrders(
+  page: number = 1,
+  pageSize: number = 20,
+  statusFilter?: string,
+): Promise<ActionResult<PaginatedOrders>> {
+  const auth = await requireCapability("orders.manage");
+  if (!auth.ok) return auth;
+
+  const supabase = createAdminClient();
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  let query = supabase
+    .from("orders")
+    .select("*, tables(name)", { count: "exact" })
+    .order("created_at", { ascending: false })
+    .range(from, to);
+
+  if (statusFilter && statusFilter !== "ALL") {
+    query = query.eq("status", statusFilter);
+  }
+
+  const { data, error, count } = await query;
+
+  if (error) return { ok: false, error: "Could not load orders." };
+
+  const orderIds = (data ?? []).map((o) => o.id);
+  const { data: itemsData } = await supabase
+    .from("order_items")
+    .select("order_id")
+    .in("order_id", orderIds);
+
+  const itemCountMap = new Map<string, number>();
+  for (const item of itemsData ?? []) {
+    itemCountMap.set(item.order_id, (itemCountMap.get(item.order_id) ?? 0) + 1);
+  }
+
+  const orders: OrderHistoryItem[] = (data ?? []).map((o) => ({
+    id: o.id,
+    table_id: o.table_id,
+    table_session_id: o.table_session_id,
+    status: o.status as OrderStatus,
+    total_cents: o.total_cents,
+    notes: o.notes,
+    created_at: o.created_at,
+    updated_at: o.updated_at,
+    table_name: (o as any).tables?.name ?? null,
+    item_count: itemCountMap.get(o.id) ?? 0,
+  }));
+
+  return { ok: true, data: { orders, total: count ?? 0 } };
+}
+
+export interface OrderInvoiceData {
+  orderId: string;
+  tableName: string;
+  status: string;
+  createdAt: string;
+  items: { name: string; quantity: number; unit_price_cents: number; notes: string | null }[];
+  subtotalCents: number;
+  taxRatePercent: number;
+  taxCents: number;
+  serviceChargeCents: number;
+  totalCents: number;
+  restaurant: {
+    name: string;
+    address: string | null;
+    phone: string | null;
+    receipt_footer: string | null;
+  };
+}
+
+export async function getOrderInvoice(
+  orderId: string,
+): Promise<ActionResult<OrderInvoiceData>> {
+  const auth = await requireCapability("orders.manage");
+  if (!auth.ok) return auth;
+
+  const supabase = createAdminClient();
+
+  const [orderRes, settingsRes] = await Promise.all([
+    supabase
+      .from("orders")
+      .select("*, tables(name)")
+      .eq("id", orderId)
+      .maybeSingle(),
+    supabase
+      .from("restaurant_settings")
+      .select("name, address, phone, receipt_footer, tax_rate_percent, service_charge_amount")
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  if (!orderRes.data) return { ok: false, error: "Order not found." };
+
+  const { data: itemsData } = await supabase
+    .from("order_items")
+    .select("*")
+    .eq("order_id", orderId);
+
+  const items = (itemsData ?? []).map((i) => ({
+    name: i.name,
+    quantity: i.quantity,
+    unit_price_cents: i.unit_price_cents,
+    notes: i.notes,
+  }));
+
+  const subtotalCents = items.reduce((s, i) => s + i.unit_price_cents * i.quantity, 0);
+  const taxRatePercent = settingsRes.data?.tax_rate_percent ?? 0;
+  const serviceChargeCents = settingsRes.data?.service_charge_amount ?? 0;
+  const taxCents = Math.round(subtotalCents * taxRatePercent / 100);
+  const totalCents = subtotalCents + taxCents + serviceChargeCents;
+
+  return {
+    ok: true,
+    data: {
+      orderId,
+      tableName: (orderRes.data as any).tables?.name ?? "Table",
+      status: orderRes.data.status,
+      createdAt: orderRes.data.created_at,
+      items,
+      subtotalCents,
+      taxRatePercent,
+      taxCents,
+      serviceChargeCents,
+      totalCents,
+      restaurant: {
+        name: settingsRes.data?.name ?? "Restaurant",
+        address: settingsRes.data?.address ?? null,
+        phone: settingsRes.data?.phone ?? null,
+        receipt_footer: settingsRes.data?.receipt_footer ?? null,
+      },
+    },
+  };
 }
