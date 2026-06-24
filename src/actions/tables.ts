@@ -103,9 +103,25 @@ export async function updateTableStatus(
   if (!valid.includes(status)) return { ok: false, error: "Invalid status" };
 
   const supabase = createAdminClient();
-  const { error } = await supabase.from("tables").update({ status }).eq("id", tableId);
-  if (error) return { ok: false, error: "Update failed." };
+
+  if (status === "AVAILABLE") {
+    // Close any active sessions for this table
+    const now = new Date().toISOString();
+    await Promise.all([
+      supabase.from("tables").update({ status }).eq("id", tableId),
+      supabase
+        .from("table_sessions")
+        .update({ status: "COMPLETED", ended_at: now })
+        .eq("table_id", tableId)
+        .is("ended_at", null),
+    ]);
+  } else {
+    const { error } = await supabase.from("tables").update({ status }).eq("id", tableId);
+    if (error) return { ok: false, error: "Update failed." };
+  }
+
   revalidatePath("/admin/tables");
+  revalidatePath("/waiter");
   return { ok: true, data: undefined };
 }
 

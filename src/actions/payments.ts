@@ -151,7 +151,7 @@ export async function completePayment(paymentId: string): Promise<ActionResult> 
 
   // Update table session and table status.
   await Promise.all([
-    supabase.from("table_sessions").update({ status: "COMPLETED" }).eq("id", tableSessionId),
+    supabase.from("table_sessions").update({ status: "COMPLETED", ended_at: new Date().toISOString() }).eq("id", tableSessionId),
     tableId
       ? supabase.from("tables").update({ status: "CLEANING" }).eq("id", tableId)
       : Promise.resolve(),

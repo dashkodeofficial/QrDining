@@ -14,6 +14,9 @@ export const dynamic = "force-dynamic";
  * lived httpOnly cookie referencing the session, then redirect to the menu.
  *
  * A revoked or unknown token shows a friendly invalid-code screen.
+ *
+ * This page lives OUTSIDE the (customer) route group so the customer layout's
+ * access guard does not block it before the session cookie can be set.
  */
 export default async function QrResolvePage({
   params,
