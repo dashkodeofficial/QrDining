@@ -18,7 +18,7 @@ export async function getActiveOrders(): Promise<ActionResult<OrderWithItems[]>>
   const { data: orders, error } = await supabase
     .from("orders")
     .select("*, tables(name)")
-    .in("status", ["PLACED", "ACCEPTED", "PREPARING", "READY"])
+    .in("status", ["PLACED", "PREPARING", "READY"])
     .order("created_at", { ascending: true });
 
   if (error) return { ok: false, error: "Could not load orders." };

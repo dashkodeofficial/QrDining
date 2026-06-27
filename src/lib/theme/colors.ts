@@ -39,7 +39,6 @@ export type BrandColor = keyof typeof brandColors;
 export const statusColors: Record<string, BrandColor> = {
   // Order lifecycle
   PLACED: "info",
-  ACCEPTED: "info",
   PREPARING: "warning",
   READY: "accent",
   SERVED: "primary",

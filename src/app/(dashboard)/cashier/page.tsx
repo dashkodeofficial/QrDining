@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { getPayments, generateBill, completePayment, getInvoice, type InvoiceData } from "@/actions/payments";
+import { downloadInvoicePDF } from "@/lib/pdf";
 import { getTables } from "@/actions/dashboard";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -111,7 +112,9 @@ export default function CashierDashboardPage() {
       toast.error(res.error);
       return;
     }
-    printInvoice(res.data);
+    const html = buildInvoiceHTML(res.data);
+    await downloadInvoicePDF(html, `invoice-${tableSessionId.slice(0, 8)}.pdf`);
+    toast.success("Invoice downloaded");
   }
 
   if (loading) {
@@ -149,6 +152,12 @@ export default function CashierDashboardPage() {
       {/* KPI Stats */}
       <div className="grid gap-3 sm:grid-cols-3">
         <StatCard
+          icon={<FileText className="size-4" />}
+          label="Bill Requests"
+          value={billRequests.length}
+          color="text-orange-600 bg-orange-50 dark:bg-orange-950/30 dark:text-orange-400"
+        />
+        <StatCard
           icon={<Clock className="size-4" />}
           label="Pending"
           value={pending.length}
@@ -160,16 +169,19 @@ export default function CashierDashboardPage() {
           value={completed.length}
           color="text-emerald-600 bg-emerald-50 dark:bg-emerald-950/30 dark:text-emerald-400"
         />
-        <StatCard
-          icon={<FileText className="size-4" />}
-          label="Bill Requests"
-          value={billRequests.length}
-          color="text-orange-600 bg-orange-50 dark:bg-orange-950/30 dark:text-orange-400"
-        />
       </div>
 
-      <Tabs defaultValue="pending">
+      <Tabs defaultValue="bills">
         <TabsList className="w-full justify-start rounded-xl bg-muted/50 p-1">
+          <TabsTrigger value="bills" className="gap-1.5 rounded-lg">
+            <FileText className="size-3.5" />
+            Bill Requests
+            {billRequests.length > 0 && (
+              <span className="ml-1 inline-flex size-5 items-center justify-center rounded-full bg-orange-500 text-[10px] font-bold text-white">
+                {billRequests.length}
+              </span>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="pending" className="gap-1.5 rounded-lg">
             <Clock className="size-3.5" />
             Pending
@@ -188,16 +200,35 @@ export default function CashierDashboardPage() {
               </span>
             )}
           </TabsTrigger>
-          <TabsTrigger value="bills" className="gap-1.5 rounded-lg">
-            <FileText className="size-3.5" />
-            Bill Requests
-            {billRequests.length > 0 && (
-              <span className="ml-1 inline-flex size-5 items-center justify-center rounded-full bg-orange-500 text-[10px] font-bold text-white">
-                {billRequests.length}
-              </span>
-            )}
-          </TabsTrigger>
         </TabsList>
+
+        <TabsContent value="bills" className="mt-4">
+          {billRequests.length === 0 ? (
+            <EmptyState icon="🧾" title="No bill requests" description="Customers will request bills here." />
+          ) : (
+            <div className="max-w-2xl grid gap-3 sm:grid-cols-2">
+              {billRequests.map((t) => (
+                <Card key={t.id} className="overflow-hidden border-border/50">
+                  <div className="h-0.5 bg-orange-500" />
+                  <CardContent className="flex items-center justify-between p-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-orange-50 dark:bg-orange-950/30">
+                        <FileText className="size-4 text-orange-600" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-bold text-sm truncate">{t.name}</p>
+                        <p className="text-xs text-muted-foreground">{t.seat_capacity} seats</p>
+                      </div>
+                    </div>
+                    <Button size="sm" className="shrink-0 h-8" onClick={() => handleGenerateBill(t.id)}>
+                      <FileText className="mr-1.5 size-3.5" /> Generate Bill
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
 
         <TabsContent value="pending" className="mt-4 space-y-3">
           {pending.length === 0 ? (
@@ -229,34 +260,6 @@ export default function CashierDashboardPage() {
                   onPrint={() => handlePrintInvoice(p.table_session_id)}
                   onDownload={() => handleDownloadInvoice(p.table_session_id)}
                 />
-              ))}
-            </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="bills" className="mt-4">
-          {billRequests.length === 0 ? (
-            <EmptyState icon="🧾" title="No bill requests" description="Customers will request bills here." />
-          ) : (
-            <div className="max-w-2xl grid gap-3 sm:grid-cols-2">
-              {billRequests.map((t) => (
-                <Card key={t.id} className="overflow-hidden border-border/50">
-                  <div className="h-0.5 bg-orange-500" />
-                  <CardContent className="flex items-center justify-between p-3">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-orange-50 dark:bg-orange-950/30">
-                        <FileText className="size-4 text-orange-600" />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-bold text-sm truncate">{t.name}</p>
-                        <p className="text-xs text-muted-foreground">{t.seat_capacity} seats</p>
-                      </div>
-                    </div>
-                    <Button size="sm" className="shrink-0 h-8" onClick={() => handleGenerateBill(t.id)}>
-                      <FileText className="mr-1.5 size-3.5" /> Generate Bill
-                    </Button>
-                  </CardContent>
-                </Card>
               ))}
             </div>
           )}
@@ -371,13 +374,7 @@ function PaymentCard({
   );
 }
 
-function printInvoice(invoice: InvoiceData) {
-  const printWindow = window.open("", "_blank");
-  if (!printWindow) {
-    toast.error("Please allow popups to print invoices.");
-    return;
-  }
-
+function buildInvoiceHTML(invoice: InvoiceData): string {
   const invoiceNo = `INV-${invoice.sessionId.slice(0, 8).toUpperCase()}`;
   const invoiceDate = new Date().toLocaleDateString("en-PK", {
     day: "2-digit",
@@ -398,42 +395,49 @@ function printInvoice(invoice: InvoiceData) {
     </tr>
   `).join("");
 
+  return `<!DOCTYPE html><html><head><title>Invoice - ${invoice.restaurant.name ?? "Restaurant"}</title><style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; color: #1a1a1a; background: #fff; }
+.invoice { max-width: 600px; margin: 0 auto; padding: 32px; }
+.header { display: flex; align-items: center; gap: 12px; padding-bottom: 20px; border-bottom: 2px solid #e23744; }
+.logo { width: 48px; height: 48px; border-radius: 12px; background: #e23744; display: flex; align-items: center; justify-content: center; color: white; font-size: 24px; }
+.restaurant-name { font-size: 20px; font-weight: 700; }
+.restaurant-info { font-size: 12px; color: #666; margin-top: 2px; }
+.invoice-meta { display: flex; justify-content: space-between; margin-top: 20px; padding: 12px 16px; background: #f8f8f8; border-radius: 8px; }
+.meta-item { font-size: 12px; }
+.meta-label { color: #999; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+.meta-value { font-weight: 600; margin-top: 2px; }
+table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #999; padding: 8px 12px; border-bottom: 2px solid #eee; }
+td { padding: 10px 12px; font-size: 13px; border-bottom: 1px solid #f0f0f0; }
+.totals { margin-top: 16px; margin-left: auto; width: 240px; }
+.total-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; }
+.total-row.grand { border-top: 2px solid #eee; margin-top: 8px; padding-top: 12px; font-size: 16px; font-weight: 700; }
+.total-row.grand .value { color: #e23744; }
+.footer { margin-top: 32px; text-align: center; padding-top: 20px; border-top: 1px solid #eee; }
+.footer-text { font-size: 12px; color: #666; }
+.thank-you { font-size: 14px; font-weight: 600; margin-top: 8px; color: #1a1a1a; }
+.payment-status { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 10px; font-weight: 600; text-transform: uppercase; }
+.status-completed { background: #dcfce7; color: #16a34a; }
+.status-pending { background: #fef3c7; color: #d97706; }
+</style></head><body>
+<div class="invoice">
+<div class="header"><div class="logo">🍽</div><div><div class="restaurant-name">${invoice.restaurant.name}</div>${invoice.restaurant.address ? `<div class="restaurant-info">${invoice.restaurant.address}</div>` : ""}${invoice.restaurant.phone ? `<div class="restaurant-info">Tel: ${invoice.restaurant.phone}</div>` : ""}</div></div>
+<div class="invoice-meta"><div class="meta-item"><div class="meta-label">Invoice No.</div><div class="meta-value">${invoiceNo}</div></div><div class="meta-item"><div class="meta-label">Date</div><div class="meta-value">${invoiceDate}</div></div><div class="meta-item"><div class="meta-label">Table</div><div class="meta-value">${invoice.tableName}</div></div>${invoice.payment ? `<div class="meta-item"><div class="meta-label">Payment</div><div class="meta-value"><span class="payment-status ${invoice.payment.status === "COMPLETED" ? "status-completed" : "status-pending"}">${invoice.payment.status}</span></div></div>` : ""}</div>
+<table><thead><tr><th style="width:40px">#</th><th>Item</th><th style="width:50px;text-align:center">Qty</th><th style="width:80px;text-align:right">Unit Price</th><th style="width:90px;text-align:right">Total</th></tr></thead><tbody>${itemsHTML}</tbody></table>
+<div class="totals"><div class="total-row"><span>Subtotal</span><span class="value">${fmtPKR(invoice.subtotalCents)}</span></div><div class="total-row"><span>Tax (${invoice.taxRatePercent}%)</span><span class="value">${fmtPKR(invoice.taxCents)}</span></div>${invoice.serviceChargeCents > 0 ? `<div class="total-row"><span>Service Charge</span><span class="value">${fmtPKR(invoice.serviceChargeCents)}</span></div>` : ""}<div class="total-row grand"><span>Grand Total</span><span class="value">${fmtPKR(invoice.totalCents)}</span></div></div>
+<div class="footer">${invoice.restaurant.receipt_footer ? `<div class="footer-text">${invoice.restaurant.receipt_footer}</div>` : ""}<div class="thank-you">Thank you for dining with us!</div></div>
+</div></body></html>`;
+}
+
+function printInvoice(invoice: InvoiceData) {
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) {
+    toast.error("Please allow popups to print invoices.");
+    return;
+  }
   printWindow.document.open();
-  printWindow.document.write("<!DOCTYPE html>");
-  printWindow.document.write("<html><head><title>Invoice - " + (invoice.restaurant.name ?? "Restaurant") + "</title>");
-  printWindow.document.write("<style>");
-  printWindow.document.write("* { margin: 0; padding: 0; box-sizing: border-box; }");
-  printWindow.document.write("body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; color: #1a1a1a; background: #fff; }");
-  printWindow.document.write(".invoice { max-width: 600px; margin: 0 auto; padding: 32px; }");
-  printWindow.document.write(".header { display: flex; align-items: center; gap: 12px; padding-bottom: 20px; border-bottom: 2px solid #e23744; }");
-  printWindow.document.write(".logo { width: 48px; height: 48px; border-radius: 12px; background: #e23744; display: flex; align-items: center; justify-content: center; color: white; font-size: 24px; }");
-  printWindow.document.write(".restaurant-name { font-size: 20px; font-weight: 700; }");
-  printWindow.document.write(".restaurant-info { font-size: 12px; color: #666; margin-top: 2px; }");
-  printWindow.document.write(".invoice-meta { display: flex; justify-content: space-between; margin-top: 20px; padding: 12px 16px; background: #f8f8f8; border-radius: 8px; }");
-  printWindow.document.write(".meta-item { font-size: 12px; }");
-  printWindow.document.write(".meta-label { color: #999; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }");
-  printWindow.document.write(".meta-value { font-weight: 600; margin-top: 2px; }");
-  printWindow.document.write("table { width: 100%; border-collapse: collapse; margin-top: 20px; }");
-  printWindow.document.write("th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #999; padding: 8px 12px; border-bottom: 2px solid #eee; }");
-  printWindow.document.write("td { padding: 10px 12px; font-size: 13px; border-bottom: 1px solid #f0f0f0; }");
-  printWindow.document.write(".totals { margin-top: 16px; margin-left: auto; width: 240px; }");
-  printWindow.document.write(".total-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; }");
-  printWindow.document.write(".total-row.grand { border-top: 2px solid #eee; margin-top: 8px; padding-top: 12px; font-size: 16px; font-weight: 700; }");
-  printWindow.document.write(".total-row.grand .value { color: #e23744; }");
-  printWindow.document.write(".footer { margin-top: 32px; text-align: center; padding-top: 20px; border-top: 1px solid #eee; }");
-  printWindow.document.write(".footer-text { font-size: 12px; color: #666; }");
-  printWindow.document.write(".thank-you { font-size: 14px; font-weight: 600; margin-top: 8px; color: #1a1a1a; }");
-  printWindow.document.write(".payment-status { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 10px; font-weight: 600; text-transform: uppercase; }");
-  printWindow.document.write(".status-completed { background: #dcfce7; color: #16a34a; }");
-  printWindow.document.write(".status-pending { background: #fef3c7; color: #d97706; }");
-  printWindow.document.write("</style></head><body>");
-  printWindow.document.write('<div class="invoice">');
-  printWindow.document.write('<div class="header"><div class="logo">🍽</div><div><div class="restaurant-name">' + invoice.restaurant.name + '</div>' + (invoice.restaurant.address ? '<div class="restaurant-info">' + invoice.restaurant.address + '</div>' : '') + (invoice.restaurant.phone ? '<div class="restaurant-info">Tel: ' + invoice.restaurant.phone + '</div>' : '') + '</div></div>');
-  printWindow.document.write('<div class="invoice-meta"><div class="meta-item"><div class="meta-label">Invoice No.</div><div class="meta-value">' + invoiceNo + '</div></div><div class="meta-item"><div class="meta-label">Date</div><div class="meta-value">' + invoiceDate + '</div></div><div class="meta-item"><div class="meta-label">Table</div><div class="meta-value">' + invoice.tableName + '</div></div>' + (invoice.payment ? '<div class="meta-item"><div class="meta-label">Payment</div><div class="meta-value"><span class="payment-status ' + (invoice.payment.status === "COMPLETED" ? "status-completed" : "status-pending") + '">' + invoice.payment.status + '</span></div></div>' : '') + '</div>');
-  printWindow.document.write('<table><thead><tr><th style="width:40px">#</th><th>Item</th><th style="width:50px;text-align:center">Qty</th><th style="width:80px;text-align:right">Unit Price</th><th style="width:90px;text-align:right">Total</th></tr></thead><tbody>' + itemsHTML + '</tbody></table>');
-  printWindow.document.write('<div class="totals"><div class="total-row"><span>Subtotal</span><span class="value">' + fmtPKR(invoice.subtotalCents) + '</span></div><div class="total-row"><span>Tax (' + invoice.taxRatePercent + '%)</span><span class="value">' + fmtPKR(invoice.taxCents) + '</span></div>' + (invoice.serviceChargeCents > 0 ? '<div class="total-row"><span>Service Charge</span><span class="value">' + fmtPKR(invoice.serviceChargeCents) + '</span></div>' : '') + '<div class="total-row grand"><span>Grand Total</span><span class="value">' + fmtPKR(invoice.totalCents) + '</span></div></div>');
-  printWindow.document.write('<div class="footer">' + (invoice.restaurant.receipt_footer ? '<div class="footer-text">' + invoice.restaurant.receipt_footer + '</div>' : '') + '<div class="thank-you">Thank you for dining with us!</div></div>');
-  printWindow.document.write('</div></body></html>');
+  printWindow.document.write(buildInvoiceHTML(invoice));
   printWindow.document.close();
   setTimeout(() => printWindow.print(), 500);
 }

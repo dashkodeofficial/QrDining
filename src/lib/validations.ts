@@ -101,6 +101,8 @@ export const settingsSchema = z.object({
   tax_rate_percent: z.coerce.number().int().min(0).max(100).default(0),
   service_charge_amount: z.coerce.number().int().min(0).max(100000).default(0),
   receipt_footer: z.string().trim().max(500).optional().or(z.literal("")),
+  primary_color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional().or(z.literal("")),
+  favicon_url: z.string().url().optional().or(z.literal("")),
 });
 
 export type CategoryInput = z.infer<typeof categorySchema>;

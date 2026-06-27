@@ -14,6 +14,7 @@ import {
   UtensilsCrossed,
 } from "lucide-react";
 import { getAllOrders, getOrderInvoice, type OrderHistoryItem, type OrderInvoiceData } from "@/actions/orders";
+import { downloadInvoicePDF } from "@/lib/pdf";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -31,7 +32,6 @@ const PAGE_SIZE = 20;
 const STATUS_FILTERS: { value: string; label: string }[] = [
   { value: "ALL", label: "All Orders" },
   { value: "PLACED", label: "Placed" },
-  { value: "ACCEPTED", label: "Accepted" },
   { value: "PREPARING", label: "Preparing" },
   { value: "READY", label: "Ready" },
   { value: "SERVED", label: "Served" },
@@ -83,7 +83,9 @@ export default function OrderHistoryPage() {
       toast.error(res.error);
       return;
     }
-    printOrderInvoice(res.data);
+    const html = buildOrderInvoiceHTML(res.data);
+    await downloadInvoicePDF(html, `invoice-${orderId.slice(0, 8)}.pdf`);
+    toast.success("Invoice downloaded");
   }
 
   return (
@@ -340,13 +342,7 @@ function OrderDetailDialog({
   );
 }
 
-function printOrderInvoice(invoice: OrderInvoiceData) {
-  const printWindow = window.open("", "_blank");
-  if (!printWindow) {
-    toast.error("Please allow popups to print invoices.");
-    return;
-  }
-
+function buildOrderInvoiceHTML(invoice: OrderInvoiceData): string {
   const invoiceNo = `INV-${invoice.orderId.slice(0, 8).toUpperCase()}`;
   const invoiceDate = new Date(invoice.createdAt).toLocaleDateString("en-PK", {
     day: "2-digit",
@@ -367,40 +363,47 @@ function printOrderInvoice(invoice: OrderInvoiceData) {
     </tr>
   `).join("");
 
+  return `<!DOCTYPE html><html><head><title>Invoice - ${invoice.restaurant.name ?? "Restaurant"}</title><style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; color: #1a1a1a; background: #fff; }
+.invoice { max-width: 600px; margin: 0 auto; padding: 32px; }
+.header { display: flex; align-items: center; gap: 12px; padding-bottom: 20px; border-bottom: 2px solid #e23744; }
+.logo { width: 48px; height: 48px; border-radius: 12px; background: #e23744; display: flex; align-items: center; justify-content: center; color: white; font-size: 24px; }
+.restaurant-name { font-size: 20px; font-weight: 700; }
+.restaurant-info { font-size: 12px; color: #666; margin-top: 2px; }
+.invoice-meta { display: flex; justify-content: space-between; margin-top: 20px; padding: 12px 16px; background: #f8f8f8; border-radius: 8px; }
+.meta-item { font-size: 12px; }
+.meta-label { color: #999; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+.meta-value { font-weight: 600; margin-top: 2px; }
+table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #999; padding: 8px 12px; border-bottom: 2px solid #eee; }
+td { padding: 10px 12px; font-size: 13px; border-bottom: 1px solid #f0f0f0; }
+.totals { margin-top: 16px; margin-left: auto; width: 240px; }
+.total-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; }
+.total-row.grand { border-top: 2px solid #eee; margin-top: 8px; padding-top: 12px; font-size: 16px; font-weight: 700; }
+.total-row.grand .value { color: #e23744; }
+.footer { margin-top: 32px; text-align: center; padding-top: 20px; border-top: 1px solid #eee; }
+.footer-text { font-size: 12px; color: #666; }
+.thank-you { font-size: 14px; font-weight: 600; margin-top: 8px; color: #1a1a1a; }
+.order-status { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 10px; font-weight: 600; text-transform: uppercase; }
+</style></head><body>
+<div class="invoice">
+<div class="header"><div class="logo">🍽</div><div><div class="restaurant-name">${invoice.restaurant.name}</div>${invoice.restaurant.address ? `<div class="restaurant-info">${invoice.restaurant.address}</div>` : ""}${invoice.restaurant.phone ? `<div class="restaurant-info">Tel: ${invoice.restaurant.phone}</div>` : ""}</div></div>
+<div class="invoice-meta"><div class="meta-item"><div class="meta-label">Invoice No.</div><div class="meta-value">${invoiceNo}</div></div><div class="meta-item"><div class="meta-label">Date</div><div class="meta-value">${invoiceDate}</div></div><div class="meta-item"><div class="meta-label">Table</div><div class="meta-value">${invoice.tableName}</div></div><div class="meta-item"><div class="meta-label">Status</div><div class="meta-value">${invoice.status}</div></div></div>
+<table><thead><tr><th style="width:40px">#</th><th>Item</th><th style="width:50px;text-align:center">Qty</th><th style="width:80px;text-align:right">Unit Price</th><th style="width:90px;text-align:right">Total</th></tr></thead><tbody>${itemsHTML}</tbody></table>
+<div class="totals"><div class="total-row"><span>Subtotal</span><span class="value">${fmtPKR(invoice.subtotalCents)}</span></div><div class="total-row"><span>Tax (${invoice.taxRatePercent}%)</span><span class="value">${fmtPKR(invoice.taxCents)}</span></div>${invoice.serviceChargeCents > 0 ? `<div class="total-row"><span>Service Charge</span><span class="value">${fmtPKR(invoice.serviceChargeCents)}</span></div>` : ""}<div class="total-row grand"><span>Grand Total</span><span class="value">${fmtPKR(invoice.totalCents)}</span></div></div>
+<div class="footer">${invoice.restaurant.receipt_footer ? `<div class="footer-text">${invoice.restaurant.receipt_footer}</div>` : ""}<div class="thank-you">Thank you for dining with us!</div></div>
+</div></body></html>`;
+}
+
+function printOrderInvoice(invoice: OrderInvoiceData) {
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) {
+    toast.error("Please allow popups to print invoices.");
+    return;
+  }
   printWindow.document.open();
-  printWindow.document.write("<!DOCTYPE html>");
-  printWindow.document.write("<html><head><title>Invoice - " + (invoice.restaurant.name ?? "Restaurant") + "</title>");
-  printWindow.document.write("<style>");
-  printWindow.document.write("* { margin: 0; padding: 0; box-sizing: border-box; }");
-  printWindow.document.write("body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; color: #1a1a1a; background: #fff; }");
-  printWindow.document.write(".invoice { max-width: 600px; margin: 0 auto; padding: 32px; }");
-  printWindow.document.write(".header { display: flex; align-items: center; gap: 12px; padding-bottom: 20px; border-bottom: 2px solid #e23744; }");
-  printWindow.document.write(".logo { width: 48px; height: 48px; border-radius: 12px; background: #e23744; display: flex; align-items: center; justify-content: center; color: white; font-size: 24px; }");
-  printWindow.document.write(".restaurant-name { font-size: 20px; font-weight: 700; }");
-  printWindow.document.write(".restaurant-info { font-size: 12px; color: #666; margin-top: 2px; }");
-  printWindow.document.write(".invoice-meta { display: flex; justify-content: space-between; margin-top: 20px; padding: 12px 16px; background: #f8f8f8; border-radius: 8px; }");
-  printWindow.document.write(".meta-item { font-size: 12px; }");
-  printWindow.document.write(".meta-label { color: #999; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }");
-  printWindow.document.write(".meta-value { font-weight: 600; margin-top: 2px; }");
-  printWindow.document.write("table { width: 100%; border-collapse: collapse; margin-top: 20px; }");
-  printWindow.document.write("th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: #999; padding: 8px 12px; border-bottom: 2px solid #eee; }");
-  printWindow.document.write("td { padding: 10px 12px; font-size: 13px; border-bottom: 1px solid #f0f0f0; }");
-  printWindow.document.write(".totals { margin-top: 16px; margin-left: auto; width: 240px; }");
-  printWindow.document.write(".total-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; }");
-  printWindow.document.write(".total-row.grand { border-top: 2px solid #eee; margin-top: 8px; padding-top: 12px; font-size: 16px; font-weight: 700; }");
-  printWindow.document.write(".total-row.grand .value { color: #e23744; }");
-  printWindow.document.write(".footer { margin-top: 32px; text-align: center; padding-top: 20px; border-top: 1px solid #eee; }");
-  printWindow.document.write(".footer-text { font-size: 12px; color: #666; }");
-  printWindow.document.write(".thank-you { font-size: 14px; font-weight: 600; margin-top: 8px; color: #1a1a1a; }");
-  printWindow.document.write(".order-status { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 10px; font-weight: 600; text-transform: uppercase; }");
-  printWindow.document.write("</style></head><body>");
-  printWindow.document.write('<div class="invoice">');
-  printWindow.document.write('<div class="header"><div class="logo">🍽</div><div><div class="restaurant-name">' + invoice.restaurant.name + '</div>' + (invoice.restaurant.address ? '<div class="restaurant-info">' + invoice.restaurant.address + '</div>' : '') + (invoice.restaurant.phone ? '<div class="restaurant-info">Tel: ' + invoice.restaurant.phone + '</div>' : '') + '</div></div>');
-  printWindow.document.write('<div class="invoice-meta"><div class="meta-item"><div class="meta-label">Invoice No.</div><div class="meta-value">' + invoiceNo + '</div></div><div class="meta-item"><div class="meta-label">Date</div><div class="meta-value">' + invoiceDate + '</div></div><div class="meta-item"><div class="meta-label">Table</div><div class="meta-value">' + invoice.tableName + '</div></div><div class="meta-item"><div class="meta-label">Status</div><div class="meta-value">' + invoice.status + '</div></div></div>');
-  printWindow.document.write('<table><thead><tr><th style="width:40px">#</th><th>Item</th><th style="width:50px;text-align:center">Qty</th><th style="width:80px;text-align:right">Unit Price</th><th style="width:90px;text-align:right">Total</th></tr></thead><tbody>' + itemsHTML + '</tbody></table>');
-  printWindow.document.write('<div class="totals"><div class="total-row"><span>Subtotal</span><span class="value">' + fmtPKR(invoice.subtotalCents) + '</span></div><div class="total-row"><span>Tax (' + invoice.taxRatePercent + '%)</span><span class="value">' + fmtPKR(invoice.taxCents) + '</span></div>' + (invoice.serviceChargeCents > 0 ? '<div class="total-row"><span>Service Charge</span><span class="value">' + fmtPKR(invoice.serviceChargeCents) + '</span></div>' : '') + '<div class="total-row grand"><span>Grand Total</span><span class="value">' + fmtPKR(invoice.totalCents) + '</span></div></div>');
-  printWindow.document.write('<div class="footer">' + (invoice.restaurant.receipt_footer ? '<div class="footer-text">' + invoice.restaurant.receipt_footer + '</div>' : '') + '<div class="thank-you">Thank you for dining with us!</div></div>');
-  printWindow.document.write('</div></body></html>');
+  printWindow.document.write(buildOrderInvoiceHTML(invoice));
   printWindow.document.close();
   setTimeout(() => printWindow.print(), 500);
 }

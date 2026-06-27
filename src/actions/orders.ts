@@ -197,8 +197,7 @@ export async function placeOrder(
 
 /** Allowed forward transitions on the order lifecycle. */
 const NEXT_STATUS: Partial<Record<OrderStatus, OrderStatus>> = {
-  PLACED: "ACCEPTED",
-  ACCEPTED: "PREPARING",
+  PLACED: "PREPARING",
   PREPARING: "READY",
   READY: "SERVED",
   SERVED: "COMPLETED",
@@ -254,7 +253,7 @@ export async function cancelOrder(orderId: string): Promise<ActionResult> {
     .from("orders")
     .update({ status: "CANCELLED" })
     .in("id", [orderId])
-    .in("status", ["PLACED", "ACCEPTED"]);
+    .in("status", ["PLACED"]);
 
   if (error) return { ok: false, error: "Could not cancel order" };
 
@@ -363,7 +362,7 @@ export async function getOrderInvoice(
 
   const supabase = createAdminClient();
 
-  const [orderRes, settingsRes] = await Promise.all([
+  const [orderRes, settingsRes, itemsRes] = await Promise.all([
     supabase
       .from("orders")
       .select("*, tables(name)")
@@ -374,14 +373,15 @@ export async function getOrderInvoice(
       .select("name, address, phone, receipt_footer, tax_rate_percent, service_charge_amount")
       .limit(1)
       .maybeSingle(),
+    supabase
+      .from("order_items")
+      .select("*")
+      .eq("order_id", orderId),
   ]);
 
   if (!orderRes.data) return { ok: false, error: "Order not found." };
 
-  const { data: itemsData } = await supabase
-    .from("order_items")
-    .select("*")
-    .eq("order_id", orderId);
+  const itemsData = itemsRes.data;
 
   const items = (itemsData ?? []).map((i) => ({
     name: i.name,

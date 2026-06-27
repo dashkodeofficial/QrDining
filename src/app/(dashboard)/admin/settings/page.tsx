@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Settings, Save, Eye, EyeOff, User } from "lucide-react";
-import { getSettings, updateSettings, getCurrentAdmin, updateAdminProfile } from "@/actions/settings";
+import { useEffect, useState, useRef } from "react";
+import { Settings, Save, Eye, EyeOff, User, Upload, ImageIcon } from "lucide-react";
+import { getSettings, updateSettings, getCurrentAdmin, updateAdminProfile, uploadFavicon } from "@/actions/settings";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,6 +22,11 @@ export default function SettingsPage() {
   const [adminEmail, setAdminEmail] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
   const [showAdminPassword, setShowAdminPassword] = useState(false);
+  const [primaryColor, setPrimaryColor] = useState("#e23744");
+  const [faviconUrl, setFaviconUrl] = useState<string | null>(null);
+  const [uploadingFavicon, setUploadingFavicon] = useState(false);
+  const faviconInputRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
 
   useEffect(() => {
     async function load() {
@@ -30,6 +36,8 @@ export default function SettingsPage() {
       ]);
       if (settingsRes.ok) {
         setSettings(settingsRes.data);
+        setPrimaryColor(settingsRes.data.primary_color ?? "#e23744");
+        setFaviconUrl(settingsRes.data.favicon_url);
       } else {
         toast.error(settingsRes.error);
       }
@@ -55,8 +63,11 @@ export default function SettingsPage() {
       tax_rate_percent: fd.get("tax_rate_percent"),
       service_charge_amount: fd.get("service_charge_amount"),
       receipt_footer: fd.get("receipt_footer"),
+      primary_color: primaryColor,
+      favicon_url: faviconUrl,
     });
     toast[res.ok ? "success" : "error"](res.ok ? "Settings saved" : res.error);
+    if (res.ok) router.refresh();
     setSaving(false);
   }
 
@@ -98,11 +109,11 @@ export default function SettingsPage() {
       </div>
 
       <Tabs defaultValue="restaurant">
-        <TabsList className="h-10">
-          <TabsTrigger value="restaurant" className="h-8">
+        <TabsList className="h-9">
+          <TabsTrigger value="restaurant" className="h-9">
             Restaurant
           </TabsTrigger>
-          <TabsTrigger value="admin" className="h-8">
+          <TabsTrigger value="admin" className="h-9">
             Admin Settings
           </TabsTrigger>
         </TabsList>
@@ -156,6 +167,85 @@ export default function SettingsPage() {
                     placeholder="contact@restaurant.com"
                     className="rounded-md h-10"
                   />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Appearance</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Site Favicon</Label>
+                  <div className="flex items-center gap-4">
+                    <div className="flex size-12 shrink-0 items-center justify-center rounded-lg border border-border bg-muted/50 overflow-hidden">
+                      {faviconUrl ? (
+                        <img src={faviconUrl} alt="Favicon" className="size-8 object-contain" />
+                      ) : (
+                        <ImageIcon className="size-5 text-muted-foreground" />
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <input
+                        ref={faviconInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          if (file.size > 512 * 1024) {
+                            toast.error("Favicon must be under 512 KB.");
+                            return;
+                          }
+                          setUploadingFavicon(true);
+                          const fd = new FormData();
+                          fd.append("file", file);
+                          const res = await uploadFavicon(fd);
+                          if (res.ok) {
+                            setFaviconUrl(res.data.url);
+                            toast.success("Favicon updated");
+                            router.refresh();
+                          } else {
+                            toast.error(res.error);
+                          }
+                          setUploadingFavicon(false);
+                          if (faviconInputRef.current) faviconInputRef.current.value = "";
+                        }}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={uploadingFavicon}
+                        onClick={() => faviconInputRef.current?.click()}
+                      >
+                        <Upload className="mr-2 size-4" />
+                        {uploadingFavicon ? "Uploading…" : "Upload Favicon"}
+                      </Button>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Max 512 KB. Recommended: 32×32 or 64×64 PNG/ICO.</p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Primary Color</Label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="color"
+                      value={primaryColor}
+                      onChange={(e) => setPrimaryColor(e.target.value)}
+                      className="size-10 cursor-pointer rounded-lg border border-border bg-transparent p-1"
+                    />
+                    <div
+                      className="flex h-10 flex-1 items-center rounded-lg border border-border px-3 text-sm font-medium"
+                      style={{ backgroundColor: primaryColor, color: "#fff" }}
+                    >
+                      {primaryColor}
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Applied throughout the app after saving.</p>
                 </div>
               </CardContent>
             </Card>

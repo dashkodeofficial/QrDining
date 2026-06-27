@@ -17,10 +17,10 @@ import { toast } from "sonner";
 import type { OrderWithItems } from "@/actions/dashboard";
 import type { OrderItem } from "@/lib/types/db";
 
-const ACTIVE_STATUSES = ["PLACED", "ACCEPTED", "PREPARING", "READY"];
+const ACTIVE_STATUSES = ["PLACED", "PREPARING", "READY"];
 
 const COLUMNS = [
-  { key: "new", label: "New Orders", icon: "📥", statuses: ["PLACED", "ACCEPTED"] as string[], accent: "bg-amber-500", headerBg: "bg-amber-50 dark:bg-amber-950/30", headerText: "text-amber-700 dark:text-amber-300", countBg: "bg-amber-500", countText: "text-white" },
+  { key: "new", label: "New Orders", icon: "📥", statuses: ["PLACED"] as string[], accent: "bg-amber-500", headerBg: "bg-amber-50 dark:bg-amber-950/30", headerText: "text-amber-700 dark:text-amber-300", countBg: "bg-amber-500", countText: "text-white" },
   { key: "preparing", label: "Preparing", icon: "🍳", statuses: ["PREPARING"] as string[], accent: "bg-blue-500", headerBg: "bg-blue-50 dark:bg-blue-950/30", headerText: "text-blue-700 dark:text-blue-300", countBg: "bg-blue-500", countText: "text-white" },
   { key: "ready", label: "Ready", icon: "✅", statuses: ["READY"] as string[], accent: "bg-emerald-500", headerBg: "bg-emerald-50 dark:bg-emerald-950/30", headerText: "text-emerald-700 dark:text-emerald-300", countBg: "bg-emerald-500", countText: "text-white" },
 ];
@@ -217,9 +217,8 @@ function OrderCard({
   const isDelayed = minutes > 20;
   const isUrgent = minutes > 30;
   const nextLabel =
-    order.status === "PLACED" ? "Accept" :
-    order.status === "ACCEPTED" ? "Start Preparing" :
-    order.status === "PREPARING" ? "Mark Ready" : "Mark Served";
+    order.status === "PLACED" ? "Accept Order" :
+    order.status === "PREPARING" ? "Mark as Ready" : "Mark as Served";
 
   return (
     <Card className={

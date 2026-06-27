@@ -61,6 +61,7 @@ export async function createWaiterRequest(
   }
 
   revalidatePath(`/orders`);
+  revalidatePath(`/waiter`);
   return { ok: true, data: undefined };
 }
 

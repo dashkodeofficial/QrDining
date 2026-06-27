@@ -8,7 +8,7 @@ import type { StaffRole } from "@/lib/types/db";
 
 const LINKS: { href: string; label: string; cap: Parameters<typeof can>[1] }[] = [
   { href: "/admin", label: "Overview", cap: "orders.manage" },
-  { href: "/admin/orders", label: "Orders", cap: "orders.manage" },
+  { href: "/admin/orders", label: "Order History", cap: "orders.manage" },
   { href: "/admin/menu", label: "Menu", cap: "menu.manage" },
   { href: "/admin/tables", label: "Tables", cap: "tables.manage" },
   { href: "/admin/staff", label: "Staff", cap: "staff.manage" },

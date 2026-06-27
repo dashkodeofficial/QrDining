@@ -178,6 +178,8 @@ export interface RestaurantSettings {
   tax_rate_percent: number;
   service_charge_amount: number;
   receipt_footer: string | null;
+  favicon_url: string | null;
+  primary_color: string | null;
   updated_at: string;
 }
 
@@ -215,5 +217,6 @@ export interface Voucher {
   expires_at: string;
   used_at: string | null;
   reward_id: string | null;
+  batch_number: number;
   created_at: string;
 }

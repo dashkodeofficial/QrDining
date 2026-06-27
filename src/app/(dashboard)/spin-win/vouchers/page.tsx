@@ -90,6 +90,16 @@ export default function VoucherSettingsPage() {
     return vouchers.filter((v) => getVoucherStatus(v) === activeTab);
   }, [vouchers, activeTab]);
 
+  const batches = useMemo(() => {
+    const map = new Map<number, Voucher[]>();
+    for (const v of filtered) {
+      const list = map.get(v.batch_number) ?? [];
+      list.push(v);
+      map.set(v.batch_number, list);
+    }
+    return Array.from(map.entries()).sort((a, b) => b[0] - a[0]);
+  }, [filtered]);
+
   const counts = useMemo(() => ({
     active: vouchers.filter((v) => getVoucherStatus(v) === "active").length,
     expired: vouchers.filter((v) => getVoucherStatus(v) === "expired").length,
@@ -102,14 +112,13 @@ export default function VoucherSettingsPage() {
     { value: "used", label: "Used", count: counts.used },
   ];
 
-  function handlePrint() {
-    const printVouchers = filtered;
-    if (printVouchers.length === 0) {
+  function handlePrintBatch(batchVouchers: Voucher[]) {
+    if (batchVouchers.length === 0) {
       toast.error("No vouchers to print.");
       return;
     }
 
-    const voucherHTML = printVouchers.map((v) => {
+    const voucherHTML = batchVouchers.map((v) => {
       const status = getVoucherStatus(v);
       const expiryDate = new Date(v.expires_at).toLocaleDateString("en-PK", { day: "2-digit", month: "short", year: "numeric" });
       return `
@@ -328,51 +337,61 @@ export default function VoucherSettingsPage() {
         <EmptyState icon="🎟️" title="No vouchers yet" description="Generate vouchers to distribute to customers." />
       ) : (
         <div className="space-y-4">
-          {/* Sub-tabs + print button */}
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 overflow-x-auto pb-1">
-              {TABS.map((tab) => (
-                <button
-                  key={tab.value}
-                  onClick={() => setActiveTab(tab.value)}
-                  className={cn(
-                    "shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
-                    activeTab === tab.value
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-muted-foreground hover:bg-muted/70",
-                  )}
-                >
-                  {tab.label}
-                  <span className={cn(
-                    "ml-1.5 inline-flex size-4 items-center justify-center rounded-full text-[9px] font-bold",
-                    activeTab === tab.value ? "bg-primary-foreground/20" : "bg-background",
-                  )}>
-                    {tab.count}
-                  </span>
-                </button>
-              ))}
-            </div>
-            <Button variant="outline" size="sm" className="shrink-0" onClick={handlePrint}>
-              <Printer className="mr-1.5 size-3.5" /> Print
-            </Button>
+          {/* Sub-tabs */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1">
+            {TABS.map((tab) => (
+              <button
+                key={tab.value}
+                onClick={() => setActiveTab(tab.value)}
+                className={cn(
+                  "shrink-0 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors",
+                  activeTab === tab.value
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted text-muted-foreground hover:bg-muted/70",
+                )}
+              >
+                {tab.label}
+                <span className={cn(
+                  "ml-1.5 inline-flex size-4 items-center justify-center rounded-full text-[9px] font-bold",
+                  activeTab === tab.value ? "bg-primary-foreground/20" : "bg-background",
+                )}>
+                  {tab.count}
+                </span>
+              </button>
+            ))}
           </div>
 
           {filtered.length === 0 ? (
             <EmptyState icon="📭" title={`No ${activeTab} vouchers`} description={`There are no ${activeTab} vouchers at the moment.`} />
           ) : (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {filtered.map((v) => {
-                const status = getVoucherStatus(v);
-                return (
-                  <VoucherCard
-                    key={v.id}
-                    voucher={v}
-                    status={status}
-                    onDelete={() => handleDelete(v.id)}
-                    onDownload={() => downloadVoucherPNG(v)}
-                  />
-                );
-              })}
+            <div className="space-y-6">
+              {batches.map(([batchNum, batchVouchers]) => (
+                <div key={batchNum} className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-muted-foreground">
+                      Batch {batchNum}
+                      <span className="ml-2 text-xs text-muted-foreground/70">({batchVouchers.length} voucher{batchVouchers.length !== 1 ? "s" : ""})</span>
+                    </h3>
+                    <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => handlePrintBatch(batchVouchers)}>
+                      <Printer className="mr-1.5 size-3" /> Print Batch
+                    </Button>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {batchVouchers.map((v) => {
+                      const status = getVoucherStatus(v);
+                      return (
+                        <VoucherCard
+                          key={v.id}
+                          voucher={v}
+                          status={status}
+                          onDelete={() => handleDelete(v.id)}
+                          onDownload={() => downloadVoucherPNG(v)}
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>

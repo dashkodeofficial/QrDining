@@ -48,7 +48,6 @@ export function formatDate(iso: string): string {
 /** A friendly label for each order-status enum value. */
 export const ORDER_STATUS_LABEL: Record<string, string> = {
   PLACED: "Order Placed",
-  ACCEPTED: "Accepted",
   PREPARING: "Preparing",
   READY: "Ready",
   SERVED: "Served",
@@ -59,7 +58,6 @@ export const ORDER_STATUS_LABEL: Record<string, string> = {
 /** Ordered steps for the customer-facing status timeline. */
 export const ORDER_TIMELINE_STEPS = [
   "PLACED",
-  "ACCEPTED",
   "PREPARING",
   "READY",
   "SERVED",

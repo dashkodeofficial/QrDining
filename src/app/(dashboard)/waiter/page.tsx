@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Bell, CheckCircle2, UtensilsCrossed, Banknote, Sparkles, Clock, Plus, Receipt } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
@@ -22,6 +22,11 @@ export default function WaiterDashboardPage() {
   const [requests, setRequests] = useState<WaiterRequestWithTable[]>([]);
   const [role, setRole] = useState<StaffRole | null>(null);
   const [loading, setLoading] = useState(true);
+  const tablesRef = useRef<RestaurantTable[]>([]);
+
+  useEffect(() => {
+    tablesRef.current = tables;
+  }, [tables]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -69,7 +74,7 @@ export default function WaiterDashboardPage() {
         (payload) => {
           const req = payload.new as WaiterRequestWithTable;
           if (payload.eventType === "INSERT" && req.status === "PENDING") {
-            const tableName = tables.find((t) => t.id === req.table_id)?.name;
+            const tableName = tablesRef.current.find((t) => t.id === req.table_id)?.name;
             setRequests((prev) => [{ ...req, table_name: tableName ?? prev.find((r) => r.table_id === req.table_id)?.table_name }, ...prev]);
           } else if (payload.eventType === "UPDATE") {
             setRequests((prev) =>
@@ -275,7 +280,7 @@ function RequestCard({ req, table, onResolve }: { req: WaiterRequestWithTable; t
                 {WAITER_REQUEST_LABEL[req.type] ?? req.type}
               </p>
               <p className="text-xs text-muted-foreground truncate">
-                Table {table?.name ?? req.table_name ?? req.table_id.slice(0, 8)}
+                {table?.name ?? req.table_name ?? req.table_id.slice(0, 8)}
               </p>
             </div>
           </div>

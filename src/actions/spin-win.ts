@@ -60,6 +60,16 @@ export async function generateVouchers(
 
   const supabase = createAdminClient();
 
+  // Determine the next batch number
+  const { data: maxBatch } = await supabase
+    .from("vouchers")
+    .select("batch_number")
+    .order("batch_number", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const batchNumber = (maxBatch?.batch_number ?? 0) + 1;
+
   // Generate unique codes (retry on collision)
   const codes: string[] = [];
   for (let i = 0; i < clamped; i++) {
@@ -76,6 +86,7 @@ export async function generateVouchers(
     code,
     expiry_type: expiryType,
     expires_at: expiresAt,
+    batch_number: batchNumber,
   }));
 
   const { data, error } = await supabase
